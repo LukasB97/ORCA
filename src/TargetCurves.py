@@ -1,8 +1,39 @@
-from src.Curve import Curve
+import math
 
+import numpy as np
+
+from src.Curve import Curve
+from src.Utils import hz_to_log
+
+DEFAULT_POINTS = np.logspace(0, math.log10(25000), 128, endpoint=True)
+DEFAULT_BASE = DEFAULT_POINTS[-1] / DEFAULT_POINTS[-2]
+DEFAULT_START = DEFAULT_POINTS[0]
+
+
+def create_target_curve(freq_to_boost: dict = None):
+    assert len(freq_to_boost) >= 4
+    if not freq_to_boost:
+        freq_to_boost = []
+    freqs= list(freq_to_boost.keys())
+    freqs.sort()
+    boost = []
+    for freq in freqs:
+        boost.append(freq_to_boost[freq])
+    if len(freqs) < 4:
+        freqs = [1, 2] + freqs + [30000, 300001]
+        boost = [0, 0] + boost + [0, 0]
+    for i in range(len(freqs)):
+        freqs[i] = hz_to_log(freqs[i], DEFAULT_BASE, DEFAULT_START)
+
+    return Curve(freqs,
+                 boost,
+                 convert_to_log=False,
+                 log_base=DEFAULT_BASE,
+                 starting_freq=DEFAULT_START
+                 )
 
 def linear():
-    return Curve.create_target_curve({
+    return create_target_curve({
         1: 0,
         500: 0,
         4000: 0,

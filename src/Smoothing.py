@@ -13,8 +13,8 @@ class SMOOTHING_FACTOR(enum.Enum):
 
 def smooth_curve(points, smoothing_factor: SMOOTHING_FACTOR):
     """
-    :param points:
-    :param smoothing_factor:
+    :param points: array of values to smooth
+    :param smoothing_factor: Determines the strength of the smoothing process
     :return:
     """
     if not isinstance(smoothing_factor, SMOOTHING_FACTOR):
