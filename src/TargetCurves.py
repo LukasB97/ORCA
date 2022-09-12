@@ -14,13 +14,13 @@ def create_target_curve(freq_to_boost: dict = None):
     assert len(freq_to_boost) >= 4
     if not freq_to_boost:
         freq_to_boost = []
-    freqs= list(freq_to_boost.keys())
+    freqs = list(freq_to_boost.keys())
     freqs.sort()
     boost = []
     for freq in freqs:
         boost.append(freq_to_boost[freq])
     if len(freqs) < 4:
-        freqs = [1, 2] + freqs + [30000, 300001]
+        freqs = [1, 2] + freqs + [25000, 25001]
         boost = [0, 0] + boost + [0, 0]
     for i in range(len(freqs)):
         freqs[i] = hz_to_log(freqs[i], DEFAULT_BASE, DEFAULT_START)
@@ -29,8 +29,10 @@ def create_target_curve(freq_to_boost: dict = None):
                  boost,
                  convert_to_log=False,
                  log_base=DEFAULT_BASE,
-                 starting_freq=DEFAULT_START
+                 starting_freq=DEFAULT_START,
+                 interpolation_alg="cubic"
                  )
+
 
 def linear():
     return create_target_curve({
@@ -40,25 +42,29 @@ def linear():
         25000: 0
     })
 
+
 def downwards_slope(drop_off_freq=100, drop=-7.5):
-    return Curve.create_target_curve({
+    return create_target_curve({
         1: 0,
         drop_off_freq: 0,
         20000: drop,
         25000: drop
     })
+
 
 def downwards_slope_linear_upper_mids(drop_off_freq=100, drop=-7.5):
-    return Curve.create_target_curve({
+    return create_target_curve({
         1: 0,
         drop_off_freq: 0,
         20000: drop,
         25000: drop
     })
 
+
 def v_shape(boost=5):
-    return Curve.create_target_curve({
+    return create_target_curve({
         1: 0,
+        20: boost,
         100: boost,
         300: (-1) * boost,
         800: 0,
@@ -66,3 +72,9 @@ def v_shape(boost=5):
         10000: 0,
         20000: -5
     })
+
+
+def adjust_bass_target(target, measurements):
+    print("TODO: adjust bass target")
+    print(measurements)
+    return target

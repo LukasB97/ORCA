@@ -1,39 +1,55 @@
+import dataclasses
 import math
+from typing import Callable
 
 import numpy as np
 
+from src import WeightingFuns
+from src.Utils import log_spaced_ints
 
+
+@dataclasses.dataclass
+class RoomCorrectionConfig:
+
+    weighting_fun: Callable[[int, float], float] = WeightingFuns.default
+    max_boost: int = 10
+    on_target_freq: int = 60
+    std_dev_impact: int = 3
+
+    def __post_init__(self):
+        if self.std_dev_impact > 9:
+            raise ValueError("std_dev_impact must be in [0, ..., 9]")
+
+
+
+@dataclasses.dataclass
 class EQConfig:
 
-    def __init__(self, eq_res=None, eq_points=None, eq_from=20, eq_to=20000, formatter=None):
+    def __init__(self,
+                 eq_res=None,
+                 eq_points=None,
+                 eq_from=20,
+                 eq_to=20000,
+                 formatter=None,
+                 set_max_zero=True,
+                 room_correction_config: RoomCorrectionConfig = RoomCorrectionConfig()
+                 ):
         if not eq_points:
             if not eq_res:
                 raise ValueError("Either eq_res or eq_points must be specified")
-            eq_points = list(
-                set(
-                    map(int, np.logspace(
-                        math.log10(eq_from),
-                        math.log10(eq_to),
-                        eq_res,
-                        endpoint=True
-                    ))
-                )
-            )
-            eq_points.sort()
-        self._eq_points = eq_points
+            eq_points = log_spaced_ints(eq_from, eq_to, eq_res)
+        self.eq_points = eq_points
         self.formatter = formatter
-
-    def iter_points(self):
-        for point in self._eq_points:
-            yield point
+        self.set_max_zero = set_max_zero
+        self.room_correction_config = room_correction_config
 
     def format(self, level_adjustments, delimiter="; "):
-        if len(level_adjustments) != len(self._eq_points):
+        if len(level_adjustments) != len(self.eq_points):
             raise ValueError("Number of level adjustment entries must match the number of eq_points!")
         if self.formatter:
             return self.formatter(level_adjustments)
         str_adjustments = map(str, level_adjustments)
-        points = map(str, self._eq_points)
+        points = map(str, self.eq_points)
         freq_boost_tuples = zip(points, str_adjustments)
         combo = map(" ".join, freq_boost_tuples)
         return "GraphicEQ: " + delimiter.join(combo)
