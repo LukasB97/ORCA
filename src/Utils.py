@@ -36,15 +36,15 @@ def std(elements):
     return numpy.std(elements)
 
 
-def log_spaced_ints(start, end, count):
+def log_spaced_ints(start, end, count=128):
     return list(
-            map(int, np.logspace(
-                math.log10(start),
-                math.log10(end),
-                count,
-                endpoint=True
-            ))
-        )
+        map(int, np.logspace(
+            math.log10(start),
+            math.log10(end),
+            count,
+            endpoint=True
+        ))
+    )
 
 
 def median_std_dev(elements, d=False):

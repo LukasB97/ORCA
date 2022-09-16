@@ -12,7 +12,7 @@ class SmoothingFactor(enum.Enum):
     NO_SMOOTHING = 0
 
 
-def smooth_curve(points, smoothing_factor: SmoothingFactor):
+def smooth_1d(points, smoothing_factor: SmoothingFactor):
     """
     :param points: array of values to smooth
     :param smoothing_factor: Determines the strength of the smoothing process

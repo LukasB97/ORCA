@@ -1,11 +1,10 @@
 from typing import Dict
 
 from src.Curve import Curve
-from src.Smoothing import SmoothingFactor, smooth_curve
+from src.Smoothing import SmoothingFactor
 
 
 class Measurement:
-
     _curves: Dict[int, Curve]
 
     def __init__(self, curve):

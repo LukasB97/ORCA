@@ -5,37 +5,34 @@ import numpy as np
 from src.Curve import Curve
 from src.Utils import hz_to_log
 
-DEFAULT_POINTS = np.logspace(0, math.log10(25000), 128, endpoint=True)
-DEFAULT_BASE = DEFAULT_POINTS[-1] / DEFAULT_POINTS[-2]
-DEFAULT_START = DEFAULT_POINTS[0]
+_DEFAULT_POINTS = np.logspace(0, math.log10(25000), 128, endpoint=True)
+_DEFAULT_BASE = _DEFAULT_POINTS[-1] / _DEFAULT_POINTS[-2]
+_DEFAULT_START = _DEFAULT_POINTS[0]
 
 
-def create_target_curve(freq_to_boost: dict = None):
-    assert len(freq_to_boost) >= 4
-    if not freq_to_boost:
-        freq_to_boost = []
-    freqs = list(freq_to_boost.keys())
+def _create_target_curve(freq_to_level: dict = None, interpolation_alg="linear"):
+    if interpolation_alg != "linear" and len(freq_to_level) < 4:
+        raise ValueError()
+    if not freq_to_level:
+        freq_to_level = []
+    freqs = list(freq_to_level.keys())
     freqs.sort()
     boost = []
     for freq in freqs:
-        boost.append(freq_to_boost[freq])
-    if len(freqs) < 4:
-        freqs = [1, 2] + freqs + [25000, 25001]
-        boost = [0, 0] + boost + [0, 0]
+        boost.append(freq_to_level[freq])
     for i in range(len(freqs)):
-        freqs[i] = hz_to_log(freqs[i], DEFAULT_BASE, DEFAULT_START)
+        freqs[i] = hz_to_log(freqs[i], _DEFAULT_BASE, _DEFAULT_START)
 
     return Curve(freqs,
                  boost,
-                 convert_to_log=False,
-                 log_base=DEFAULT_BASE,
-                 starting_freq=DEFAULT_START,
-                 interpolation_alg="cubic"
+                 log_base=_DEFAULT_BASE,
+                 starting_freq=_DEFAULT_START,
+                 interpolation_alg=interpolation_alg
                  )
 
 
 def linear():
-    return create_target_curve({
+    return _create_target_curve({
         1: 0,
         500: 0,
         4000: 0,
@@ -43,35 +40,33 @@ def linear():
     })
 
 
-def downwards_slope(drop_off_freq=100, drop=-7.5):
-    return create_target_curve({
+def downwards_slope(factor=1):
+    return _create_target_curve({
         1: 0,
-        drop_off_freq: 0,
-        20000: drop,
-        25000: drop
+        20000: -10 * factor
     })
 
 
-def downwards_slope_linear_upper_mids(drop_off_freq=100, drop=-7.5):
-    return create_target_curve({
+def downwards_slope_linear_upper_mids(factor=1):
+    return _create_target_curve({
         1: 0,
-        drop_off_freq: 0,
-        20000: drop,
-        25000: drop
+        1000: -5 * factor,
+        6000: -5 * factor,
+        20000: -10 * factor,
+        25000: -10 * factor
     })
 
 
-def v_shape(boost=5):
-    return create_target_curve({
-        1: 0,
-        20: boost,
-        100: boost,
-        300: (-1) * boost,
-        800: 0,
-        3000: boost,
-        10000: 0,
-        20000: -5
-    })
+def v_shape(factor=1):
+    return _create_target_curve({
+        1: -5,
+        20: 0,
+        100: 0,
+        300: -5 * factor,
+        3000: 0,
+        10000: -5 * factor,
+        20000: -10 * factor
+    }, "quadratic")
 
 
 def adjust_bass_target(target, measurements):

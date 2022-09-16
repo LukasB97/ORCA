@@ -41,10 +41,10 @@ max_boost: the maximum db boost that will be applied.
 on_target_freq: The frequency at which the algorithm tries to match the specified target curve. 
 For frequencies below on_target_freq, the target curve will be adjusted, based on the frequency
 response of the loudspeaker, to create a smooth bass-response
-std_dev_impact ([0, ..., 9]): The amount, to which the standard deviation of the different 
+std_influence ([0, ..., 9]): The amount, to which the standard deviation of the different 
 measurements at a given frequency impacts the strength of the boost level.
 For a frequency with high standard deviation between the measurements,
-a low std_dev_impact will 
+a low std_influence will 
 A high value will lead to a low adjustment boost adjustment at a given frequency,
 if the standard deviation at this frequency is high.
 
