@@ -1,54 +1,10 @@
 from typing import List
 
+from BoostComputation import calc_boost
 from Curve import Curve
 from src import TargetCurves, EQConfig
 from src.FileReader import curve_from_rew_file, get_files
 from src.Measurement import Measurement
-from src.Smoothing import SmoothingFactor
-from src.Utils import median, std
-
-
-def calc_next_boost_smoothed(
-        measurements: List[Measurement],
-        hz_value,
-        target_level,
-        current_boost,
-        weighting_factor,
-        smoothing_factor,
-        std_influence
-):
-    sp_levels = [measurement.eval(hz_value, smoothing_factor) for measurement in measurements]
-    current_level = median(sp_levels) + current_boost
-    target_diff = target_level - current_level
-
-    std_dev = std(sp_levels)
-    if std_influence != 0:  # std and std_influence does influence next boost adjustment
-        std_dev_factor = 1 / (1 + std_dev) ** (1 / (10 - std_influence))
-    else:  # std does not influence next boost adjustment
-        std_dev_factor = 1
-
-    boost_adjustment = target_diff * weighting_factor * std_dev_factor
-    return current_boost + boost_adjustment
-
-
-def calc_boost(measurements: List[Measurement], hz_value, target_level, eq_config: EQConfig.EQConfig):
-    log_pos = measurements[0].curve.get_log_from_hz(hz_value)
-    log_max = len(measurements[0].curve.x)
-    normalized = log_pos / log_max
-
-    boost = 0
-    for i, smoothing_factor in enumerate(SmoothingFactor):
-        boost = calc_next_boost_smoothed(
-            measurements,
-            hz_value,
-            target_level,
-            boost,
-            eq_config.room_correction_config.weighting_fun(i, normalized),
-            smoothing_factor,
-            eq_config.room_correction_config.std_influence
-        )
-
-    return round(boost, 1)
 
 
 def calc_eq_curve(measurements: List[Measurement], target_curve: Curve, eq_config: EQConfig.EQConfig):
