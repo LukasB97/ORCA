@@ -11,7 +11,7 @@ class Measurement:
         self._curves = dict()
         self._curves[0] = curve
 
-    def eval(self, hz, smoothing_factor: SmoothingFactor = 0):
+    def eval(self, hz, smoothing_factor: SmoothingFactor = SmoothingFactor.NO_SMOOTHING):
         if smoothing_factor.value in self._curves:
             return self._curves[smoothing_factor.value](hz)
         smoothed_curve = self._curves[0].smooth(smoothing_factor)

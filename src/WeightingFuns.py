@@ -10,5 +10,14 @@ def no_smoothing(iteration, pos):
     return 1
 
 
-def exp_decrease(iteration, pos):
-    return 1 / math.exp(pos * iteration * 1.5)
+def exp_e_decrease(iteration, pos):
+    return 1 / math.exp((1 + pos) * iteration)
+
+
+def exp_2_decrease(iteration, pos):
+    return 1 / 2 ** ((1 + pos) * iteration)
+
+
+def exp_2_decrease_2(iteration, pos):
+    return 1 / 2 ** ((1.1 + pos) ** iteration)
+

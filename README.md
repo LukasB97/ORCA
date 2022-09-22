@@ -1,4 +1,6 @@
 #ORCA
+
+Problem target(80) returned ndarray
 is an algorithm developed for generating an equalization config to
 correct the in-room frequency response of a loudspeaker to a specific target curve.
 

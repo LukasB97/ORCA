@@ -12,7 +12,7 @@ from src.Utils import log_to_hz
 
 class Curve:
 
-    def __init__(self, x, y, log_base=None, starting_freq=None, interpolation_alg="linear"):
+    def __init__(self, x, y, log_base=None, starting_freq=None, interpolation_alg="linear", centered_at=None):
         if not log_base or not starting_freq:
             self.starting_freq = x[0]
             x, base = Utils.convert_hz_to_log_scale(x)
@@ -20,10 +20,16 @@ class Curve:
         else:
             self.log_base = log_base
             self.starting_freq = starting_freq
-
+        self.centered_at = centered_at
         self.x = x
         self.y = y
         self.fun = interpolate.interp1d(x, y, kind=interpolation_alg)
+        if len(x) < 0:
+            xx = Utils.log_spaced_ints(starting_freq, starting_freq + x[-1])
+            self.fun = interpolate.interp1d(
+                xx,
+                [fun(x_) for x_ in xx],
+                kind=interpolation_alg)
 
     def get_log_from_hz(self, x):
         return Utils.hz_to_log(x, self.log_base, self.starting_freq)
@@ -33,6 +39,7 @@ class Curve:
 
     def _eval(self, input_args: List):
         if len(input_args) == 1:  # a caller with a single input expects a single output
+            arg = input_args[0]
             return self.fun(input_args[0])
         return list(  # otherwise return list
             map(
@@ -112,8 +119,19 @@ class Curve:
             x=self.x,
             y=new_y,
             log_base=self.log_base,
-            starting_freq=self.starting_freq
-        ), avg
+            starting_freq=self.starting_freq,
+            centered_at=avg
+        )
+
+    def __add__(self, other):
+        y = []
+        for x in self.x:
+            hz = self.starting_freq * self.log_base ** x
+            y.append(self(hz) + other(hz))
+        return Curve(
+            self.x, y, log_base=self.log_base, starting_freq=self.starting_freq)
+
+
 
 
 def _reduce_args(*args):

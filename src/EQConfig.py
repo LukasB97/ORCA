@@ -8,7 +8,7 @@ from src.Utils import log_spaced_ints
 
 @dataclasses.dataclass
 class RoomCorrectionConfig:
-    weighting_fun: Callable[[int, float], float] = WeightingFuns.exp_decrease
+    weighting_fun: Callable[[int, float], float] = WeightingFuns.exp_2_decrease_2
     std_influence: int = 5
 
     def __post_init__(self):

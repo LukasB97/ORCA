@@ -18,6 +18,4 @@ def smooth_1d(points, smoothing_factor: SmoothingFactor):
     :param smoothing_factor: Determines the strength of the smoothing process
     :return:
     """
-    if not isinstance(smoothing_factor, SmoothingFactor):
-        raise ValueError("smoothing_factor must be an instance of the enum SMOOTHING_FACTOR")
     return gaussian_filter(points, sigma=smoothing_factor.value)
