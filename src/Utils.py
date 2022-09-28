@@ -35,6 +35,7 @@ def median(elements):
 def std(elements):
     return numpy.std(elements)
 
+
 def log_spaced(start, end, count=128):
     return np.logspace(
         math.log10(start),
@@ -42,6 +43,7 @@ def log_spaced(start, end, count=128):
         count,
         endpoint=True
     )
+
 
 def log_spaced_ints(start, end, count=128):
     ints = list(

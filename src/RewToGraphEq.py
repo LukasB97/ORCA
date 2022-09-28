@@ -30,8 +30,9 @@ def calc_eq_curve(measurements: List[Measurement], target_curve: Curve, eq_confi
         )
     return Curve(eq_config.eq_points, eq_level)
 
+
 def _get_avg(measurements: List[Measurement]):
-    curves = [c.curve.smooth(SmoothingFactor.LIGHT_SMOOTHING) for c in measurements]
+    curves = [c.curve.smooth(SmoothingFactor.DEFAULT_SMOOTHING) for c in measurements]
     fc = measurements[0].curve
     y = []
     for x in fc.x:
@@ -41,8 +42,6 @@ def _get_avg(measurements: List[Measurement]):
 
 def _draw_equalized(avg, eq):
     (avg + eq).draw()
-
-
 
 
 def create_eq(
@@ -68,7 +67,6 @@ def create_eq(
     for point in eq_config.eq_points:
         err += (target_curve(point) - eqed_curve(point)) ** 2
 
-
     print(err)
     _draw_equalized(avg, eq_curve)
     return eq_curve
@@ -81,4 +79,3 @@ def get_graph_eq_str(
         target_curve=TargetCurves.linear()):
     eq = create_eq(measurements_dir, file_paths, eq_config, target_curve)
     return eq_config.format(eq)
-

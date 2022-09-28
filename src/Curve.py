@@ -24,22 +24,16 @@ class Curve:
         self.x = x
         self.y = y
         self.fun = interpolate.interp1d(x, y, kind=interpolation_alg)
-        if len(x) < 0:
-            xx = Utils.log_spaced_ints(starting_freq, starting_freq + x[-1])
-            self.fun = interpolate.interp1d(
-                xx,
-                [fun(x_) for x_ in xx],
-                kind=interpolation_alg)
 
-    def get_log_from_hz(self, x):
-        return Utils.hz_to_log(x, self.log_base, self.starting_freq)
+    @property
+    def max_frequency(self):
+        return self.starting_freq * self.log_base ** self.x[-1]
 
     def __call__(self, *args, **kwargs):
         return self._eval_linear(*args)
 
     def _eval(self, input_args: List):
         if len(input_args) == 1:  # a caller with a single input expects a single output
-            arg = input_args[0]
             return self.fun(input_args[0])
         return list(  # otherwise return list
             map(
@@ -92,7 +86,7 @@ class Curve:
             current += 5
 
         pyplot.xlabel('Hz', fontsize=12)
-        pyplot.ylabel('dB adjustment', fontsize=12)
+        pyplot.ylabel('dB', fontsize=12)
         pyplot.plot(x, y, color='blue')
         pyplot.xscale('log')
         pyplot.show()
@@ -123,15 +117,16 @@ class Curve:
             centered_at=avg
         )
 
+    def iter_frequencies(self):
+        for x in self.x:
+            yield self.starting_freq * self.log_base ** x
+
     def __add__(self, other):
         y = []
-        for x in self.x:
-            hz = self.starting_freq * self.log_base ** x
+        for hz in self.iter_frequencies():
             y.append(self(hz) + other(hz))
         return Curve(
             self.x, y, log_base=self.log_base, starting_freq=self.starting_freq)
-
-
 
 
 def _reduce_args(*args):

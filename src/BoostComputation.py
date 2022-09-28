@@ -1,3 +1,4 @@
+import math
 from typing import List
 
 from scipy.optimize import shgo
@@ -27,9 +28,7 @@ def minimize(target, spl):
 
 
 def calc_boost(measurements: List[Measurement], hz_value, target_level, eq_config: EQConfig):
-    log_pos = measurements[0].curve.get_log_from_hz(hz_value)
-    log_max = len(measurements[0].curve.x)
-    normalized = log_pos / log_max
+    normalized = math.log2(hz_value) / math.log2(measurements[0].curve.max_frequency)
     boost = 0
 
     for i, smoothing_factor in enumerate(SmoothingFactor):

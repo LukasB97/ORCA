@@ -8,7 +8,7 @@ from src.Utils import log_spaced_ints
 
 @dataclasses.dataclass
 class RoomCorrectionConfig:
-    weighting_fun: Callable[[int, float], float] = WeightingFuns.exp_2_decrease_2
+    weighting_fun: Callable[[int, float], float] = WeightingFuns.exp_2_decrease
     std_influence: int = 5
 
     def __post_init__(self):
@@ -68,12 +68,10 @@ def _get_wavelet_points():
     ]
 
 
-@property
 def wavelet():
     return EQConfig(eq_points=_get_wavelet_points())
 
 
-@property
 def detail():
     return EQConfig(eq_res=256)
 
