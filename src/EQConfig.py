@@ -1,19 +1,8 @@
 import dataclasses
 from typing import Callable
 
-from Curve import Curve
 from src import WeightingFuns
 from src.Utils import log_spaced_ints
-
-
-@dataclasses.dataclass
-class RoomCorrectionConfig:
-    weighting_fun: Callable[[int, float], float] = WeightingFuns.exp_2_decrease
-    std_influence: int = 5
-
-    def __post_init__(self):
-        if self.std_influence > 9:
-            raise ValueError("std_influence must be in [0, ..., 9]")
 
 
 @dataclasses.dataclass
@@ -24,7 +13,7 @@ class EQConfig:
                  eq_points=None,
                  max_boost=10,
                  set_max_zero=True,
-                 room_correction_config: RoomCorrectionConfig = RoomCorrectionConfig()
+                 weighting_fun: Callable[[int, float], float] = WeightingFuns.linear
                  ):
 
         if not eq_points:
@@ -35,25 +24,7 @@ class EQConfig:
         self.eq_points = eq_points
         self.set_max_zero = set_max_zero
         self.max_boost = max_boost
-        self.room_correction_config = room_correction_config
-
-    def format(self, eq_curve: Curve, delimiter="; "):
-        level_adjustments = [level for level in eq_curve(self.eq_points)]
-        level_adjustments = [min(level, self.max_boost) for level in level_adjustments]
-        if len(level_adjustments) != len(self.eq_points):
-            raise ValueError("Number of level adjustment entries must match the number of eq_points!")
-
-        if self.set_max_zero:
-            max_boost = max(level_adjustments)
-            level_adjustments = [l - max_boost for l in level_adjustments]
-
-        str_adjustments = ['%.1f' % level for level in level_adjustments]
-        eq_points = map(str, self.eq_points)
-
-        freq_boost_tuples = zip(eq_points, str_adjustments)
-        combo = map(" ".join, freq_boost_tuples)
-
-        return "GraphicEQ: " + delimiter.join(combo)
+        self.weighting_fun = weighting_fun
 
 
 def _get_wavelet_points():
@@ -76,6 +47,5 @@ def detail():
     return EQConfig(eq_res=256)
 
 
-@property
 def default():
     return EQConfig(eq_res=128)

@@ -35,7 +35,7 @@ def calc_boost(measurements: List[Measurement], hz_value, target_level, eq_confi
         measurements[0].eval(hz_value, smoothing_factor)
         sp_levels = [measurement.eval(hz_value, smoothing_factor) + boost for measurement in measurements]
         adjustment = minimize(target_level, sp_levels)
-        boost = boost + adjustment * eq_config.room_correction_config.weighting_fun(i, normalized)
+        boost = boost + adjustment * eq_config.weighting_fun(i, normalized)
 
     return round(boost, 1)
 

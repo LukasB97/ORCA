@@ -1,7 +1,5 @@
 #ORCA
-
-Problem target(80) returned ndarray
-is an algorithm developed for generating an equalization config to
+is an algorithm developed for generating an equalizer to
 correct the in-room frequency response of a loudspeaker to a specific target curve.
 
 Most room correction algorithms create parametric filters
@@ -35,19 +33,8 @@ in the 20-20000 Hz range.
 
 ##Customizing
 
-It is possible to customize the room-correction process, as well as the properties of
-the created eq definition.
+It is possible to customize the properties of the created eq definition.
 
-room-correction process
-
-        weighting_fun: Callable[[int, float], float] = WeightingFuns.default
-
-        std_influence ([0, ..., 9]): The amount, to which the standard deviation of the different 
-        measurements at a given frequency impacts the strength of the boost level.
-        For a frequency with high standard deviation between the measurements,
-        a low std_influence will 
-        A high value will lead to a low adjustment boost adjustment at a given frequency,
-        if the standard deviation at this frequency is high.
 
 
 EQ-Config
@@ -62,7 +49,7 @@ EQ-Config
         set_max_zero=True: Determines, if the max boost value of the created eq
         get anchored at 0 db, in order not to introduce distortion
         max_boost: the maximum db boost that will be applied.
-        room_correction_config: RoomCorrectionConfig = RoomCorrectionConfig()
+        weighting_fun: RoomCorrectionConfig = RoomCorrectionConfig()
 
 
 This can be customized by supplying a custom target curve and/or an eq config.
@@ -80,8 +67,7 @@ The higher the Hz value, the higher the impact of strongly smoothed curves.
 
 The specific weighting of .. can be changed by supplying a custom weighting function.
 
-It is possible to extend the weighting,
-by also using the standard deviation to influence the strength of the boost level
+
 
 
 

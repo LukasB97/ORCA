@@ -1,33 +1,33 @@
+import math
 import operator
 from collections.abc import Iterable
 from functools import reduce
-from typing import List
+from typing import List, Collection
 
 from matplotlib import pyplot
 from scipy.interpolate import interpolate
 
 from src import Smoothing, Utils
-from src.Utils import log_to_hz
 
 
 class Curve:
 
-    def __init__(self, x, y, log_base=None, starting_freq=None, interpolation_alg="linear", centered_at=None):
-        if not log_base or not starting_freq:
-            self.starting_freq = x[0]
-            x, base = Utils.convert_hz_to_log_scale(x)
-            self.log_base = base
-        else:
-            self.log_base = log_base
-            self.starting_freq = starting_freq
-        self.centered_at = centered_at
-        self.x = x
-        self.y = y
-        self.fun = interpolate.interp1d(x, y, kind=interpolation_alg)
+    res = 512  # Resolution of the curves
+    log = 2  # Base of the used logarithm
 
-    @property
-    def max_frequency(self):
-        return self.starting_freq * self.log_base ** self.x[-1]
+    def __init__(self, x, y,
+                 interpolation_alg="linear",
+                 centered_at=None,
+                 fun=None):
+        self.starting_freq = x[0]
+        self.max_frequency = x[-1]
+        self.centered_at = centered_at
+
+        if not fun:
+            x = [math.log(x_, Curve.log) for x_ in x]
+            self.fun = interpolate.interp1d(x, y, kind=interpolation_alg)
+        else:
+            self.fun = fun
 
     def __call__(self, *args, **kwargs):
         return self._eval_linear(*args)
@@ -50,14 +50,17 @@ class Curve:
         :return:
         """
         args = _reduce_args(*args)
-        log_values = list(  # convert Hz value to log scale
+        _max = math.log(self.max_frequency, Curve.log)
+        _min = math.log(self.starting_freq, Curve.log)
+
+        # convert Hz value to log scale and extrapolate values outside
+        # of the interpolation range with the closest value inside
+        # of the interpolation range
+        log_values = list(
             map(
-                lambda x: max(  # extrapolate values outside of the interpolation range with the closest value inside
-                    # of the interpolation range
-                    min(
-                        Utils.hz_to_log(x, self.log_base, self.starting_freq),
-                        self.x[-1]), 0
-                ),
+                lambda x: max(
+                    min(math.log(x, Curve.log), _max),
+                    _min),
                 args
             ))
 
@@ -67,10 +70,8 @@ class Curve:
         args = _reduce_args(*args)
         return self._eval(args)
 
-    def draw(self):
-        x = Utils.log_spaced_ints(
-            self.starting_freq, log_to_hz(self.x[-1], self.log_base, self.starting_freq), 256
-        )
+    def draw(self, title="Frequency Response"):
+        x = Utils.log_spaced(self.starting_freq, self.max_frequency, 256)
         y = self(x)
         pyplot.figure(dpi=300, figsize=(8.4, 4.8))
         for i in range(1, 5):
@@ -89,6 +90,8 @@ class Curve:
         pyplot.ylabel('dB', fontsize=12)
         pyplot.plot(x, y, color='blue')
         pyplot.xscale('log')
+        pyplot.title(title)
+
         pyplot.show()
 
     def smooth(self, smoothing_factor: Smoothing.SmoothingFactor):
@@ -97,36 +100,49 @@ class Curve:
         :param smoothing_factor:
         :return:
         """
+        x = Utils.log_spaced(self.starting_freq, self.max_frequency, self.res)
         return Curve(
-            self.x,
-            Smoothing.smooth_1d(self.y, smoothing_factor),
-            log_base=self.log_base,
-            starting_freq=self.starting_freq
+            x, Smoothing.smooth_1d(self(x), smoothing_factor)
         )
 
     def to_deviation_curve(self, from_freq=100, to_freq=10000):
-        points = Utils.log_spaced_ints(from_freq, to_freq, count=128)
+        points = Utils.log_spaced(from_freq, to_freq, count=128)
         avg = sum(self(points)) / len(points)
 
-        new_y = [elem - avg for elem in self.y]
+        y = [self(x) - avg for x in self.domain_frequencies]
         return Curve(
-            x=self.x,
-            y=new_y,
-            log_base=self.log_base,
-            starting_freq=self.starting_freq,
+            x=self.domain_frequencies,
+            y=y,
             centered_at=avg
         )
 
-    def iter_frequencies(self):
-        for x in self.x:
-            yield self.starting_freq * self.log_base ** x
+    @property
+    def domain_frequencies(self, count=None):
+        if not count:
+            count = self.res
+        return Utils.log_spaced(self.starting_freq, self.max_frequency, count)
 
     def __add__(self, other):
+        start = max(self.starting_freq, other.starting_freq)
+        end = min(self.max_frequency, other.max_frequency)
+        points = Utils.log_spaced(start, end, self.res)
+        new_fun = Utils.concat_functions(self.fun, other.fun)
+        y = [new_fun(math.log(x, Curve.log)) for x in points]
+
+        return Curve(points, y, fun=new_fun)
+
+    @classmethod
+    def build_average_curve(cls, curves: Collection['Curve'], smoothing_factor=Smoothing.SmoothingFactor.NO_SMOOTHING):
+        if smoothing_factor != smoothing_factor.NO_SMOOTHING:
+            curves = [c.smooth(smoothing_factor) for c in curves]
         y = []
-        for hz in self.iter_frequencies():
-            y.append(self(hz) + other(hz))
-        return Curve(
-            self.x, y, log_base=self.log_base, starting_freq=self.starting_freq)
+        points = curves[0].domain_frequencies
+        for Hz in points:
+            dbs = [c(Hz) for c in curves]
+            avg = Utils.avg([cls.log ** (db / 10) for db in dbs])  # Transform log-scale
+            y.append(math.log(avg, cls.log) * 10)
+
+        return Curve(points, y)
 
 
 def _reduce_args(*args):
@@ -134,3 +150,6 @@ def _reduce_args(*args):
     if not isinstance(args, Iterable):  # If a single number argument is passed, wrap in list
         args = [args]
     return args
+
+
+

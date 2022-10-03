@@ -4,24 +4,18 @@ import numpy
 import numpy as np
 
 
+def concat_functions(f, g):
+    def concatenated(x):
+        return f(x) + g(x)
+    return concatenated
+
+
 def log_to_hz(value, base, start_value=1):
     return start_value * base ** value
 
 
 def hz_to_log(value, base, starting_value=1):
     return math.log(value / starting_value, base)
-
-
-def get_log_base(freqs):
-    return freqs[-1] / freqs[-2]
-
-
-def convert_hz_to_log_scale(freqs):
-    base = get_log_base(freqs)
-    log_x = []
-    for i in range(len(freqs)):
-        log_x.append(i)
-    return log_x, base
 
 
 def avg(elements):
@@ -45,25 +39,24 @@ def log_spaced(start, end, count=128):
     )
 
 
-def log_spaced_ints(start, end, count=128):
+def log_spaced_ints(start, end, count=128, domain_size=None):
+    if end - start < count:
+        raise ValueError("Cannot create 128 ints between "
+                         + start + " and " + end)
+    if not domain_size:
+        domain_size = count
     ints = list(
         set(map(int, np.logspace(
             math.log10(start),
             math.log10(end),
-            count,
+            domain_size,
             endpoint=True
         )))
     )
+    if len(ints) < count:
+        next_domain_size = domain_size + count - len(ints)
+        ints = log_spaced_ints(start, end, count=count, domain_size=next_domain_size)
     ints.sort()
     return ints
 
 
-def median_std_dev(elements, d=False):
-    m = median(elements)
-    summed = 0
-    for element in elements:
-        if d:
-            summed += element - m
-        else:
-            summed += abs(element - m)
-    return summed / len(elements)
