@@ -1,9 +1,9 @@
 # ORCA
 is an algorithm developed for generating an equalizer to
-correct the in-room frequency response of a loudspeaker to a specific target curve.
+correct the in-room frequency response (FR) of a loudspeaker to a specific target curve.
 
 Most room correction algorithms create parametric filters
-to improve the in-room response of a loudspeaker.
+to improve the in-room FR of a loudspeaker.
 
 This algorithm creates a config for a detailed graphical equalizer that can be
 imported into software equalizers like EQApo or Wavelet.
@@ -15,8 +15,9 @@ You can customize the target curve and certain parameters of equalizer you want 
 
 ## Usage
 
-To use the algorithm, you need to export frequency response measurements as *.txt files from REW.
-The function create_eq is the entry point for this.
+To use the algorithm, you need to export FR measurements as *.txt files from REW.
+![Average fr of all measurements](https://user-images.githubusercontent.com/28658521/193836087-6095f64e-2b85-4b0f-8038-55ae23231b57.png)
+
 
 The simplest way is to either supply a list of paths to req files or a directory with the files.
 
@@ -27,6 +28,18 @@ The simplest way is to either supply a list of paths to req files or a directory
 In this case, the target curve is linear, and the equalizer is created with 128 log-spaced points
 in the 20-20000 Hz range.
 
+The algorithm adjusts the target curve regarding the bass response of the measurements,
+in order not to apply too much boost, as this leads to a lower overall volume and introduces distortion.
+![Adjusted target curve](https://user-images.githubusercontent.com/28658521/193834396-a3b99590-4d1f-4b0b-bd5f-9eb6920f142c.png)
+
+In the next step, a equalization curve is created to minimize the deviation from the target.
+
+The smoothness of the eq-curve can be customized, more on that later.
+
+![Created eq](https://user-images.githubusercontent.com/28658521/193834404-aaa57282-302e-454b-a4cc-78070a3bf154.png)
+
+You also get an estimation of the in-room FR after equalization.
+![FR after eq estimation](https://user-images.githubusercontent.com/28658521/193834392-6f8e556e-2a90-462a-bfc5-82cb79dc3485.png)
 ## Customizing
 
 It is possible to customize the properties of the created eq definition.

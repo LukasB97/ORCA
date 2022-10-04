@@ -16,7 +16,7 @@ def no_smoothing():
 
 def linear(iteration_influence=1.5):
     def f(iteration, pos):
-        return 1 / ((1 + pos) ** (1 + iteration * iteration_influence))
+        return 1 / ((1.1 + pos) ** (1 + iteration * iteration_influence))
     return f
 
 
