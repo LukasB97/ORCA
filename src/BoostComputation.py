@@ -8,8 +8,8 @@ from Measurement import Measurement
 from Smoothing import SmoothingFactor
 
 
-def _err(t, c, b):
-    return 2 ** (abs(t - c - b) / 10)
+def _err(target, current, boost):
+    return 2 ** (abs(target - current - boost) / 10)
 
 
 def _create_fun_to_minimize(target, spl):
@@ -28,11 +28,12 @@ def minimize(target, spl):
 
 
 def calc_boost(measurements: List[Measurement], hz_value, target_level, eq_config: EQConfig):
-    normalized = math.log2(hz_value) / math.log2(measurements[0].curve.max_frequency)
+    c = measurements[0].curve
+    normalized = (math.log(hz_value) - math.log(c.starting_freq)) / (math.log(c.max_frequency) - math.log(c.starting_freq))
     boost = 0
-
+    if hz_value > 80:
+        xxx = 1
     for i, smoothing_factor in enumerate(SmoothingFactor):
-        measurements[0].eval(hz_value, smoothing_factor)
         sp_levels = [measurement.eval(hz_value, smoothing_factor) + boost for measurement in measurements]
         adjustment = minimize(target_level, sp_levels)
         boost = boost + adjustment * eq_config.weighting_fun(i, normalized)

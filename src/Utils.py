@@ -4,30 +4,12 @@ import numpy
 import numpy as np
 
 
-def concat_functions(f, g):
-    def concatenated(x):
-        return f(x) + g(x)
-    return concatenated
-
-
-def log_to_hz(value, base, start_value=1):
-    return start_value * base ** value
-
-
-def hz_to_log(value, base, starting_value=1):
-    return math.log(value / starting_value, base)
-
-
 def avg(elements):
     return sum(elements) / len(elements)
 
 
 def median(elements):
     return numpy.median(elements)
-
-
-def std(elements):
-    return numpy.std(elements)
 
 
 def log_spaced(start, end, count=128):

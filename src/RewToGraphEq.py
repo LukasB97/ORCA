@@ -2,14 +2,14 @@ from typing import List
 
 import Utils
 from BoostComputation import calc_boost
-from Curve import Curve, build_average_curve
+from Curve import Curve
 from Smoothing import SmoothingFactor
 from src import TargetCurves, EQConfig
 from src.FileReader import curve_from_rew_file, get_files
 from src.Measurement import Measurement
 
 
-def calc_eq_curve(measurements: List[Measurement], target_curve: Curve, eq_config: EQConfig.EQConfig):
+def calc_eq_curve(measurements: List[Measurement], target_curve: Curve, eq_config: EQConfig.EQConfig, res=512):
     """
     Calculates a Graphic Equalizer for multiple measurement and a target curve
     :param eq_config: configuration for the eq generation
@@ -18,7 +18,9 @@ def calc_eq_curve(measurements: List[Measurement], target_curve: Curve, eq_confi
     :return: List of db-boost values for each point in eq_points
     """
     eq_level = []
-    eq_points = Utils.log_spaced(eq_config.eq_points[0], eq_config.eq_points[-1], 256)
+    eq_points = Utils.log_spaced(measurements[0].curve.starting_freq,
+                                 measurements[0].curve.max_frequency,
+                                 res)
 
     for hz_value in eq_points:
         eq_level.append(
@@ -53,9 +55,8 @@ def create_eq(
     file_paths = get_files(dir_path=measurements_dir, file_paths=file_paths)
     curves = list(map(Curve.to_deviation_curve, map(curve_from_rew_file, file_paths)))
 
-    avg = build_average_curve(curves)
+    avg = Curve.build_average_curve(curves)
     avg.smooth(SmoothingFactor.LIGHT_SMOOTHING).draw("Averaged Frequency Response of all Measurements")
-
     _estimate_avg_err(target_curve, avg, "The current fr")
 
     measurements = list(map(Measurement, curves))
@@ -63,7 +64,6 @@ def create_eq(
     target_curve = TargetCurves.adjust_bass_target(target_curve, measurements)
     target_curve.draw("Target Curve")
     eq_curve = calc_eq_curve(measurements, target_curve, eq_config)
-
     estimated_fr = eq_curve + avg
     estimated_fr = estimated_fr.smooth(SmoothingFactor.LIGHT_SMOOTHING)
     estimated_fr.draw("Estimated Frequency Response after Equalization")

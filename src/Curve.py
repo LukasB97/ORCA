@@ -36,9 +36,7 @@ class Curve:
         if len(input_args) == 1:  # a caller with a single input expects a single output
             return self.fun(input_args[0])
         return list(  # otherwise return list
-            map(
-                self.fun, input_args
-            )
+            map(self.fun, input_args)
         )
 
     def _eval_linear(self, *args):
@@ -126,7 +124,22 @@ class Curve:
         start = max(self.starting_freq, other.starting_freq)
         end = min(self.max_frequency, other.max_frequency)
         points = Utils.log_spaced(start, end, self.res)
-        new_fun = Utils.concat_functions(self.fun, other.fun)
+
+        def new_fun(x):
+            return self.fun(x) + other.fun(x)
+
+        y = [new_fun(math.log(x, Curve.log)) for x in points]
+
+        return Curve(points, y, fun=new_fun)
+
+    def __sub__(self, other):
+        start = max(self.starting_freq, other.starting_freq)
+        end = min(self.max_frequency, other.max_frequency)
+        points = Utils.log_spaced(start, end, self.res)
+
+        def new_fun(x):
+            return self.fun(x) - other.fun(x)
+
         y = [new_fun(math.log(x, Curve.log)) for x in points]
 
         return Curve(points, y, fun=new_fun)

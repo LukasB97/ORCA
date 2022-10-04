@@ -13,7 +13,7 @@ class EQConfig:
                  eq_points=None,
                  max_boost=10,
                  set_max_zero=True,
-                 weighting_fun: Callable[[int, float], float] = WeightingFuns.linear
+                 weighting_fun: Callable[[int, float], float] = WeightingFuns.linear()
                  ):
 
         if not eq_points:

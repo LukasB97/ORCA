@@ -1,15 +1,6 @@
-import math
-from typing import List
-
-import numpy as np
-
 import Smoothing
 import Utils
-from src.Curve import Curve, build_average_curve
-
-_DEFAULT_POINTS = np.logspace(0, math.log10(25000), 128, endpoint=True)
-_DEFAULT_BASE = _DEFAULT_POINTS[-1] / _DEFAULT_POINTS[-2]
-_DEFAULT_START = _DEFAULT_POINTS[0]
+from src.Curve import Curve
 
 
 def _create_target_curve(freq_to_level: dict = None, interpolation_alg="linear"):
@@ -66,12 +57,12 @@ def v_shape(factor=1):
     }, "quadratic")
 
 
-def adjust_bass_target(target, measurements, max_boost=5, upper_bound=80):
+def adjust_bass_target(target, measurements, max_boost=5, upper_bound=100):
     curves = [
         m.curve.smooth(Smoothing.SmoothingFactor.LIGHT_SMOOTHING) for m in measurements
     ]
-    avg = build_average_curve(curves)
-    frequencies = Utils.log_spaced(avg.starting_freq, avg.max_frequency, 256)
+    avg = Curve.build_average_curve(curves)
+    frequencies = Utils.log_spaced(avg.starting_freq, avg.max_frequency, Curve.res)
 
     y = []
     for x in frequencies:
