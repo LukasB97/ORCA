@@ -31,8 +31,6 @@ def calc_boost(measurements: List[Measurement], hz_value, target_level, eq_confi
     c = measurements[0].curve
     normalized = (math.log(hz_value) - math.log(c.starting_freq)) / (math.log(c.max_frequency) - math.log(c.starting_freq))
     boost = 0
-    if hz_value > 80:
-        xxx = 1
     for i, smoothing_factor in enumerate(SmoothingFactor):
         sp_levels = [measurement.eval(hz_value, smoothing_factor) + boost for measurement in measurements]
         adjustment = minimize(target_level, sp_levels)

@@ -1,6 +1,6 @@
 # ORCA
 is an algorithm developed for generating an equalizer to
-correct the in-room frequency response (FR) of a loudspeaker to a specific target curve.
+correct the in-room frequency response (FR) of a loudspeaker to a specified target curve.
 
 Most room correction algorithms create parametric filters
 to improve the in-room FR of a loudspeaker.
@@ -28,13 +28,17 @@ The simplest way is to either supply a list of paths to req files or a directory
 In this case, the target curve is linear, and the equalizer is created with 128 log-spaced points
 in the 20-20000 Hz range.
 
+More examples on the usage, are in the examples.py
+
 The algorithm adjusts the target curve regarding the bass response of the measurements,
 in order not to apply too much boost, as this leads to a lower overall volume and introduces distortion.
 ![Adjusted target curve](https://user-images.githubusercontent.com/28658521/193834396-a3b99590-4d1f-4b0b-bd5f-9eb6920f142c.png)
 
-In the next step, a equalization curve is created to minimize the deviation from the target.
+In the next step, an equalization curve is created to minimize the deviation from the target.
 
-The smoothness of the eq-curve can be customized, more on that later.
+The smoothness of the eq-curve is increasing from low to high frequencies.
+Different weighting functions can be used, to change the smoothing behaviour,
+more on that later.
 
 ![Created eq](https://user-images.githubusercontent.com/28658521/193834404-aaa57282-302e-454b-a4cc-78070a3bf154.png)
 
@@ -67,10 +71,13 @@ To compute an equalizer, 512 boost levels for log spaced frequencies are evaluat
 
 For each of the frequencies, the process is as follows:
 
-We take a strongly smoothed version of all the measurements,
+We take a strongly smoothed version of each measurement,
 and compare the level of our target curve to the current spl.
 
-We look for a dB adjustment at this frequency to minimize the error between target-spl and equalized-spl.
+We look for a dB adjustment at this frequency to minimize the
+error between target-spl and equalized-spl. This is a classical example of a
+convex optimization problem. You can find more on this in
+the Algorithm PDF.
 
 
 In multiple iterations, the boost gets adjusted, by

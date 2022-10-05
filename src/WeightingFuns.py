@@ -8,6 +8,8 @@ Linear/exponential... describes the type of function in the denominator
 import math
 
 
+
+
 def no_smoothing():
     def f(iteration, pos):
         return 1
@@ -38,3 +40,12 @@ def exp_2_decrease_2(iteration_influence=1):
         return 1 / 2 ** ((1 + pos) ** (iteration * iteration_influence))
     return f
 
+
+# def build_linear(start_impact, end_impact):
+#     s = [start_impact, end_impact]
+#     s = [ss / float(len(Smoothing.SmoothingFactor)) for ss in s]
+#     f = interp1d([0, 1], s)
+#     def fun(iteration, pos):
+#         return 1 / f(pos) * (1 + iteration)
+#
+#         print(len(Smoothing.SmoothingFactor))
