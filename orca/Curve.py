@@ -1,13 +1,10 @@
 import math
-import operator
 from collections.abc import Iterable
-from functools import reduce
 from typing import List, Collection
 
-from matplotlib import pyplot
-from scipy.interpolate import interpolate
+from scipy.interpolate import interp1d
 
-from src import Smoothing, Utils
+from . import Smoothing, Utils
 
 
 class Curve:
@@ -19,13 +16,29 @@ class Curve:
                  interpolation_alg="linear",
                  centered_at=None,
                  fun=None):
+        x = list(x)
+        y = list(y)
+
+        if len(x) != len(y):
+            raise ValueError("x and y must contain the same number of values")
+        if len(x) < 2:
+            raise ValueError("A curve requires at least two points")
+        if any(value <= 0 for value in x):
+            raise ValueError("Frequencies must be greater than 0")
+        if any(not math.isfinite(value) for value in x):
+            raise ValueError("Frequencies must be finite")
+        if any(not math.isfinite(value) for value in y):
+            raise ValueError("Curve values must be finite")
+        if any(left >= right for left, right in zip(x, x[1:])):
+            raise ValueError("Frequencies must be strictly increasing")
+
         self.starting_freq = x[0]
         self.max_frequency = x[-1]
         self.centered_at = centered_at
 
-        if not fun:
+        if fun is None:
             x = [math.log(x_, Curve.log) for x_ in x]
-            self.fun = interpolate.interp1d(x, y, kind=interpolation_alg)
+            self.fun = interp1d(x, y, kind=interpolation_alg)
         else:
             self.fun = fun
 
@@ -56,8 +69,8 @@ class Curve:
         # of the interpolation range
         log_values = list(
             map(
-                lambda x: max(
-                    min(math.log(x, Curve.log), _max),
+                lambda value: max(
+                    min(math.log(_validate_frequency(value), Curve.log), _max),
                     _min),
                 args
             ))
@@ -69,6 +82,11 @@ class Curve:
         return self._eval(args)
 
     def draw(self, title="Frequency Response"):
+        try:
+            from matplotlib import pyplot
+        except ImportError as exc:
+            raise RuntimeError("Plotting requires matplotlib. Install it with `pip install .[plot]`.") from exc
+
         x = Utils.log_spaced(self.starting_freq, self.max_frequency, 256)
         y = self(x)
         pyplot.figure(dpi=300, figsize=(8.4, 4.8))
@@ -104,7 +122,23 @@ class Curve:
         )
 
     def to_deviation_curve(self, from_freq=100, to_freq=10000):
-        points = Utils.log_spaced(from_freq, to_freq, count=128)
+        if from_freq is None:
+            from_freq = self.starting_freq
+        if to_freq is None:
+            to_freq = self.max_frequency
+        if from_freq <= 0 or to_freq <= 0:
+            raise ValueError("Reference frequencies must be greater than 0")
+        if from_freq >= to_freq:
+            raise ValueError("Reference frequency range must be increasing")
+
+        reference_from = max(from_freq, self.starting_freq)
+        reference_to = min(to_freq, self.max_frequency)
+        if reference_from >= reference_to:
+            raise ValueError(
+                "Reference frequency range does not overlap the curve domain"
+            )
+
+        points = Utils.log_spaced(reference_from, reference_to, count=128)
         avg = sum(self(points)) / len(points)
 
         y = [self(x) - avg for x in self.domain_frequencies]
@@ -123,6 +157,8 @@ class Curve:
     def __add__(self, other):
         start = max(self.starting_freq, other.starting_freq)
         end = min(self.max_frequency, other.max_frequency)
+        if start >= end:
+            raise ValueError("Curves do not have an overlapping frequency range")
         points = Utils.log_spaced(start, end, self.res)
 
         def new_fun(x):
@@ -135,6 +171,8 @@ class Curve:
     def __sub__(self, other):
         start = max(self.starting_freq, other.starting_freq)
         end = min(self.max_frequency, other.max_frequency)
+        if start >= end:
+            raise ValueError("Curves do not have an overlapping frequency range")
         points = Utils.log_spaced(start, end, self.res)
 
         def new_fun(x):
@@ -146,10 +184,19 @@ class Curve:
 
     @classmethod
     def build_average_curve(cls, curves: Collection['Curve'], smoothing_factor=Smoothing.SmoothingFactor.NO_SMOOTHING):
+        curves = list(curves)
+        if not curves:
+            raise ValueError("At least one curve is required")
+
         if smoothing_factor != smoothing_factor.NO_SMOOTHING:
             curves = [c.smooth(smoothing_factor) for c in curves]
         y = []
-        points = curves[0].domain_frequencies
+        start = max(curve.starting_freq for curve in curves)
+        end = min(curve.max_frequency for curve in curves)
+        if start >= end:
+            raise ValueError("Curves do not have an overlapping frequency range")
+
+        points = Utils.log_spaced(start, end, cls.res)
         for Hz in points:
             dbs = [c(Hz) for c in curves]
             avg = Utils.avg([cls.log ** (db / 10) for db in dbs])  # Transform log-scale
@@ -158,11 +205,28 @@ class Curve:
         return Curve(points, y)
 
 
+def _validate_frequency(value):
+    if not math.isfinite(value):
+        raise ValueError("Frequencies must be finite")
+    if value <= 0:
+        raise ValueError("Frequencies must be greater than 0")
+    return value
+
+
 def _reduce_args(*args):
-    args = reduce(operator.concat, args)  # If multiple collections are passed, merge
-    if not isinstance(args, Iterable):  # If a single number argument is passed, wrap in list
-        args = [args]
-    return args
+    if len(args) == 1:
+        value = args[0]
+        if isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
+            return list(value)
+        return [value]
+
+    values = []
+    for value in args:
+        if isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
+            values.extend(value)
+        else:
+            values.append(value)
+    return values
 
 
 

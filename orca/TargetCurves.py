@@ -1,6 +1,5 @@
-import Smoothing
-import Utils
-from src.Curve import Curve
+from . import Smoothing, Utils
+from .Curve import Curve
 
 
 def _create_target_curve(freq_to_level: dict = None, interpolation_alg="linear"):

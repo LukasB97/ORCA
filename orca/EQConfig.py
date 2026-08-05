@@ -1,11 +1,9 @@
-import dataclasses
 from typing import Callable
 
-from src import WeightingFuns
-from src.Utils import log_spaced_ints
+from . import WeightingFuns
+from .Utils import log_spaced_ints
 
 
-@dataclasses.dataclass
 class EQConfig:
 
     def __init__(self,
@@ -16,10 +14,12 @@ class EQConfig:
                  weighting_fun: Callable[[int, float], float] = WeightingFuns.linear()
                  ):
 
-        if not eq_points:
+        if eq_points is None:
             if not eq_res:
                 raise ValueError("Either eq_res or eq_points must be specified")
             eq_points = log_spaced_ints(eq_from, eq_to, eq_res)
+        if not eq_points:
+            raise ValueError("eq_points cannot be empty")
 
         self.eq_points = eq_points
         self.set_max_zero = set_max_zero

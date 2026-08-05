@@ -23,8 +23,7 @@ def log_spaced(start, end, count=128):
 
 def log_spaced_ints(start, end, count=128, domain_size=None):
     if end - start < count:
-        raise ValueError("Cannot create 128 ints between "
-                         + start + " and " + end)
+        raise ValueError(f"Cannot create {count} ints between {start} and {end}")
     if not domain_size:
         domain_size = count
     ints = list(

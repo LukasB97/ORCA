@@ -18,15 +18,33 @@ You can customize the target curve and certain parameters of equalizer you want 
 To use the algorithm, you need to export FR measurements as *.txt files from REW.
 ![Average fr of all measurements](https://user-images.githubusercontent.com/28658521/193836087-6095f64e-2b85-4b0f-8038-55ae23231b57.png)
 
+Install the project locally:
+
+        pip install -e .
+
+If you want to use diagnostic plots, install the optional plotting dependency:
+
+        pip install -e ".[plot]"
 
 The simplest way is to either supply a list of paths to req files or a directory with the files.
+
+        from orca.RewToGraphEq import get_graph_eq_str
 
         eq_str = get_graph_eq_str(file_paths=["path/to/file1", "path/to/file2", "path/to/file3"])
         # Or if all measurements are inside a directory:
         eq_str = get_graph_eq_str(measurements_dir="path/to/measurement/dir")
 
+You can also run the command line entrypoint:
+
+        orca-eq --measurements-dir "example measurements"
+
+Running `python main.py --measurements-dir "example measurements"` still works from a checkout.
+
 In this case, the target curve is linear, and the equalizer is created with 128 log-spaced points
 in the 20-20000 Hz range.
+
+Measurements are level-normalized against the shared 100-10000 Hz range by default. This avoids
+letting bass roll-off, room modes, or high-frequency directivity dominate the level reference.
 
 More examples on the usage, are in the examples.py
 

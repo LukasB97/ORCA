@@ -3,9 +3,9 @@ from typing import List
 
 from scipy.optimize import shgo
 
-from EQConfig import EQConfig
-from Measurement import Measurement
-from Smoothing import SmoothingFactor
+from .EQConfig import EQConfig
+from .Measurement import Measurement
+from .Smoothing import SmoothingFactor
 
 
 def _err(target, current, boost):
@@ -14,6 +14,11 @@ def _err(target, current, boost):
 
 def _create_fun_to_minimize(target, spl):
     def fun(boost):
+        try:
+            boost = float(boost[0])
+        except (TypeError, IndexError):
+            boost = float(boost)
+
         errs = 0
         for level in spl:
             errs += _err(target, level, boost)
@@ -22,9 +27,19 @@ def _create_fun_to_minimize(target, spl):
 
 
 def minimize(target, spl):
+    if not spl:
+        raise ValueError("At least one SPL value is required")
+
     fun_to_minimize = _create_fun_to_minimize(target, spl)
-    bounds = [(target - max(spl), target - min(spl))]
-    return shgo(fun_to_minimize, bounds=bounds).x[0]
+    lower = target - max(spl)
+    upper = target - min(spl)
+    if math.isclose(lower, upper):
+        return lower
+
+    result = shgo(fun_to_minimize, bounds=[(lower, upper)])
+    if not result.success:
+        raise RuntimeError(f"Boost optimization failed: {result.message}")
+    return result.x[0]
 
 
 def calc_boost(measurements: List[Measurement], hz_value, target_level, eq_config: EQConfig):

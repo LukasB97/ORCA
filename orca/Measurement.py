@@ -1,7 +1,7 @@
 from typing import Dict
 
-from src.Curve import Curve
-from src.Smoothing import SmoothingFactor
+from .Curve import Curve
+from .Smoothing import SmoothingFactor
 
 
 class Measurement:

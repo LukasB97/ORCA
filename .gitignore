@@ -1,9 +1,13 @@
 
 .idea/
 
-notex.txt
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
 
-src/__pycache__/
+notex.txt
 
 Algorithm.synctex.gz
 
