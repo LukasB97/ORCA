@@ -105,7 +105,7 @@ class FileReaderTests(unittest.TestCase):
         frequencies, spl = read_hz_and_spl(content)
 
         self.assertEqual(frequencies, [20.0, 30.0])
-        self.assertEqual(spl, [2.5, 3.5])
+        self.assertEqual(spl, [2.45, 3.51])
 
     def test_rew_parser_handles_decimal_commas(self):
         content = """
@@ -116,7 +116,7 @@ class FileReaderTests(unittest.TestCase):
         frequencies, spl = read_hz_and_spl(content)
 
         self.assertEqual(frequencies, [20.0, 30.0])
-        self.assertEqual(spl, [2.5, 3.5])
+        self.assertEqual(spl, [2.45, 3.51])
 
     def test_rew_file_reader_falls_back_to_cp1252(self):
         content = """
@@ -171,6 +171,20 @@ class FileReaderTests(unittest.TestCase):
 
         self.assertEqual(supplied_files, original_files)
 
+    def test_get_files_deduplicates_directory_and_explicit_inputs(self):
+        measurement = EXAMPLE_MEASUREMENTS / "Sep 13.txt"
+
+        files = get_files(
+            dir_path=str(EXAMPLE_MEASUREMENTS),
+            file_paths=[str(measurement)],
+        )
+
+        self.assertEqual(len(files), 5)
+        self.assertEqual(
+            len({str(Path(file).resolve()).lower() for file in files}),
+            len(files),
+        )
+
     def test_get_files_rejects_missing_inputs(self):
         with self.assertRaises(ValueError):
             get_files()
@@ -183,6 +197,18 @@ class ConfigAndEndToEndTests(unittest.TestCase):
     def test_log_spaced_int_error_is_informative(self):
         with self.assertRaisesRegex(ValueError, "Cannot create 128 ints"):
             log_spaced_ints(20, 30, count=128)
+
+    def test_log_spaced_ints_include_exact_integer_bounds(self):
+        points = log_spaced_ints(20, 30, count=11)
+
+        self.assertEqual(points, list(range(20, 31)))
+
+    def test_log_spaced_ints_do_not_truncate_float_artifacts(self):
+        points = log_spaced_ints(30, 18000, count=256)
+
+        self.assertEqual(len(points), 256)
+        self.assertEqual(points[0], 30)
+        self.assertEqual(points[-1], 18000)
 
     def test_minimize_rejects_empty_spl(self):
         with self.assertRaises(ValueError):
@@ -221,6 +247,26 @@ class ConfigAndEndToEndTests(unittest.TestCase):
         output = format_eq_str(curve, config)
 
         self.assertTrue(output.startswith("GraphicEQ: "))
+
+    def test_format_eq_preserves_shape_when_anchoring_at_zero(self):
+        curve = Curve([100, 1000], [11, 20])
+        config = EQConfig(
+            eq_points=[100, 1000],
+            max_boost=10,
+            set_max_zero=True,
+        )
+
+        self.assertEqual(format_eq_str(curve, config), "GraphicEQ: 100 -9.0; 1000 0.0")
+
+    def test_format_eq_caps_boost_without_zero_anchor(self):
+        curve = Curve([100, 1000], [11, 20])
+        config = EQConfig(
+            eq_points=[100, 1000],
+            max_boost=10,
+            set_max_zero=False,
+        )
+
+        self.assertEqual(format_eq_str(curve, config), "GraphicEQ: 100 10.0; 1000 10.0")
 
     def test_measurements_need_reference_range_overlap(self):
         with self.assertRaisesRegex(ValueError, "reference range"):

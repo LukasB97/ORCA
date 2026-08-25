@@ -40,7 +40,7 @@ def read_hz_and_spl(rew_str):
             if len(parts) < 2:
                 raise ValueError(f"Invalid REW data row: {raw_line!r}")
             freq = _parse_rew_float(parts[0], raw_line)
-            spl = round(_parse_rew_float(parts[1], raw_line), 1)
+            spl = _parse_rew_float(parts[1], raw_line)
             if not math.isfinite(freq) or not math.isfinite(spl):
                 raise ValueError(f"Invalid REW data row: {raw_line!r}")
             if freq >= 20:
@@ -91,4 +91,14 @@ def get_files(dir_path=None, file_paths: List[str] = None):
         file_paths.extend(get_all_txt_files(dir_path))
     if not file_paths:
         raise ValueError("No measurement files found")
-    return file_paths
+
+    unique_paths = []
+    seen_paths = set()
+    for file_path in file_paths:
+        path = Path(file_path)
+        normalized_path = os.path.normcase(str(path.resolve(strict=False)))
+        if normalized_path in seen_paths:
+            continue
+        seen_paths.add(normalized_path)
+        unique_paths.append(str(file_path))
+    return unique_paths
