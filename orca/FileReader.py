@@ -85,6 +85,8 @@ def get_files(dir_path=None, file_paths: List[str] = None):
         file_paths = []
     elif isinstance(file_paths, (str, os.PathLike)):
         file_paths = [str(file_paths)]
+    else:
+        file_paths = list(file_paths)
     if dir_path:
         file_paths.extend(get_all_txt_files(dir_path))
     if not file_paths:
