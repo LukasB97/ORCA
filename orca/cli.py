@@ -1,10 +1,14 @@
-import argparse
+from __future__ import annotations
 
-from . import EQConfig
+import argparse
+from collections.abc import Callable, Sequence
+
+from . import Wavelet
+from .EQConfig import EQConfig
 from .RewToGraphEq import get_graph_eq_str
 
 
-def _build_parser():
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Create a GraphicEQ string from REW measurement exports."
     )
@@ -37,16 +41,16 @@ def _build_parser():
     return parser
 
 
-def _get_config(name):
-    configs = {
-        "default": EQConfig.default,
-        "detail": EQConfig.detail,
-        "wavelet": EQConfig.wavelet,
+def _get_config(name: str) -> EQConfig:
+    configs: dict[str, Callable[[], EQConfig]] = {
+        "default": EQConfig,
+        "detail": lambda: EQConfig.from_range(eq_res=256),
+        "wavelet": Wavelet.config,
     }
     return configs[name]()
 
 
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
     if not args.measurements_dir and not args.files:

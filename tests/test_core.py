@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from dataclasses import FrozenInstanceError, is_dataclass
 from decimal import localcontext
 from fractions import Fraction
 from pathlib import Path
@@ -23,6 +24,7 @@ from orca.RewToGraphEq import (
     format_eq_str,
 )
 from orca.Utils import log_spaced_ints
+from orca.Wavelet import WAVELET_POINTS, config as wavelet_config
 from examples import custom_eq_config_example
 
 
@@ -229,6 +231,25 @@ class FileReaderTests(unittest.TestCase):
 
 
 class ConfigAndEndToEndTests(unittest.TestCase):
+    def test_eq_config_is_an_immutable_dataclass(self):
+        config = EQConfig(eq_points=[100, 1000])
+
+        self.assertTrue(is_dataclass(config))
+        with self.assertRaises(FrozenInstanceError):
+            config.max_boost = 5.0
+
+    def test_eq_config_from_range_builds_requested_grid(self):
+        config = EQConfig.from_range(eq_from=30, eq_to=18000, eq_res=256)
+
+        self.assertEqual(len(config.eq_points), 256)
+        self.assertEqual(config.eq_points[0], 30.0)
+        self.assertEqual(config.eq_points[-1], 18000.0)
+
+    def test_wavelet_config_uses_wavelet_frequency_layout(self):
+        config = wavelet_config()
+
+        self.assertEqual(config.eq_points, tuple(float(point) for point in WAVELET_POINTS))
+
     def test_log_spaced_int_error_is_informative(self):
         with self.assertRaisesRegex(ValueError, "Cannot create 128 ints"):
             log_spaced_ints(20, 30, count=128)

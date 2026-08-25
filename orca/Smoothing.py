@@ -1,7 +1,13 @@
+from __future__ import annotations
+
 import enum
 
 import numpy as np
-from scipy.ndimage import gaussian_filter1d
+from numpy.typing import ArrayLike
+from scipy.ndimage import gaussian_filter1d  # type: ignore[import-untyped]
+from typing import cast
+
+from .Types import FloatArray
 
 
 class SmoothingFactor(enum.Enum):
@@ -23,24 +29,28 @@ _SIGMA_OCTAVES = {
 }
 
 
-def smooth_1d(frequencies, points, smoothing_factor: SmoothingFactor):
+def smooth_1d(
+    frequencies: ArrayLike,
+    points: ArrayLike,
+    smoothing_factor: SmoothingFactor,
+) -> FloatArray:
     """
     :param frequencies: logarithmically spaced frequencies for the values
     :param points: array of values to smooth
     :param smoothing_factor: Determines the strength of the smoothing process
     :return:
     """
-    frequencies = np.asarray(frequencies, dtype=float)
-    points = np.asarray(points, dtype=float)
-    if frequencies.shape != points.shape:
+    frequency_array = np.asarray(frequencies, dtype=float)
+    point_array = np.asarray(points, dtype=float)
+    if frequency_array.shape != point_array.shape:
         raise ValueError("frequencies and points must have the same shape")
     if smoothing_factor is SmoothingFactor.NO_SMOOTHING:
-        return points.copy()
+        return cast(FloatArray, point_array.copy())
 
-    octave_steps = np.diff(np.log2(frequencies))
+    octave_steps = np.diff(np.log2(frequency_array))
     median_step = float(np.median(octave_steps))
     if not np.allclose(octave_steps, median_step, rtol=0.001, atol=0):
         raise ValueError("Smoothing requires a logarithmically uniform frequency grid")
 
     sigma_samples = _SIGMA_OCTAVES[smoothing_factor] / median_step
-    return gaussian_filter1d(points, sigma=sigma_samples)
+    return cast(FloatArray, gaussian_filter1d(point_array, sigma=sigma_samples))

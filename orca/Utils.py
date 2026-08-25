@@ -1,13 +1,18 @@
+from __future__ import annotations
+
 import math
+from collections.abc import Collection
 
 import numpy as np
 
+from .Types import FloatArray
 
-def avg(elements):
+
+def avg(elements: Collection[float]) -> float:
     return sum(elements) / len(elements)
 
 
-def log_spaced(start, end, count=128):
+def log_spaced(start: float, end: float, count: int = 128) -> FloatArray:
     return np.logspace(
         math.log10(start),
         math.log10(end),
@@ -16,7 +21,12 @@ def log_spaced(start, end, count=128):
     )
 
 
-def log_spaced_ints(start, end, count=128, domain_size=None):
+def log_spaced_ints(
+    start: float,
+    end: float,
+    count: int = 128,
+    domain_size: int | None = None,
+) -> list[int]:
     if not math.isfinite(start) or not math.isfinite(end):
         raise ValueError("Frequency bounds must be finite")
     if start <= 0 or end <= 0:
@@ -37,7 +47,7 @@ def log_spaced_ints(start, end, count=128, domain_size=None):
         raise ValueError("domain_size must be a positive integer")
 
     while True:
-        ints = {
+        int_set = {
             max(first_int, min(last_int, round(value)))
             for value in np.logspace(
                 math.log10(start),
@@ -46,8 +56,8 @@ def log_spaced_ints(start, end, count=128, domain_size=None):
                 endpoint=True,
             )
         }
-        ints.update((first_int, last_int))
-        ints = sorted(ints)
+        int_set.update((first_int, last_int))
+        ints = sorted(int_set)
         if len(ints) >= count:
             break
         domain_size += count - len(ints)

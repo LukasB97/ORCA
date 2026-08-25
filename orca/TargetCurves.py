@@ -1,8 +1,16 @@
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+
 from . import Smoothing
 from .Curve import Curve
+from .Measurement import Measurement
 
 
-def _create_target_curve(freq_to_level: dict = None, interpolation_alg="linear"):
+def _create_target_curve(
+    freq_to_level: Mapping[float, float],
+    interpolation_alg: str = "linear",
+) -> Curve:
     if interpolation_alg != "linear" and len(freq_to_level) < 4:
         raise ValueError()
 
@@ -18,7 +26,7 @@ def _create_target_curve(freq_to_level: dict = None, interpolation_alg="linear")
                  )
 
 
-def linear():
+def linear() -> Curve:
     return _create_target_curve({
         1: 0,
         500: 0,
@@ -27,14 +35,14 @@ def linear():
     })
 
 
-def downwards_slope(factor=1):
+def downwards_slope(factor: float = 1) -> Curve:
     return _create_target_curve({
         1: 0,
         20000: -10 * factor
     })
 
 
-def downwards_slope_linear_upper_mids(factor=1):
+def downwards_slope_linear_upper_mids(factor: float = 1) -> Curve:
     return _create_target_curve({
         1: 0,
         1000: -5 * factor,
@@ -44,7 +52,7 @@ def downwards_slope_linear_upper_mids(factor=1):
     })
 
 
-def v_shape(factor=1):
+def v_shape(factor: float = 1) -> Curve:
     return _create_target_curve({
         1: -5,
         20: 0,
@@ -56,7 +64,12 @@ def v_shape(factor=1):
     }, "quadratic")
 
 
-def adjust_bass_target(target, measurements, max_boost=5, upper_bound=100):
+def adjust_bass_target(
+    target: Curve,
+    measurements: Sequence[Measurement],
+    max_boost: float = 5,
+    upper_bound: float = 100,
+) -> Curve:
     curves = [
         m.curve.smooth(Smoothing.SmoothingFactor.LIGHT_SMOOTHING) for m in measurements
     ]
