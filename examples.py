@@ -20,12 +20,11 @@ def custom_target_curve_example():
     )
 
 
-def custom_eq_config_example(calculation_res=512):
+def custom_eq_config_example():
     eq_config = EQConfig(eq_res=256, eq_from=30, eq_to=18000)
     return get_graph_eq_str(
         measurements_dir=str(EXAMPLE_MEASUREMENTS),
         eq_config=eq_config,
-        calculation_res=calculation_res,
     )
 
 

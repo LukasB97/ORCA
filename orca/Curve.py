@@ -9,7 +9,6 @@ from . import Smoothing, Utils
 
 class Curve:
 
-    res = 512  # Resolution of the curves
     log = 2  # Base of the used logarithm
 
     def __init__(self, x, y,
@@ -35,6 +34,8 @@ class Curve:
         self.starting_freq = x[0]
         self.max_frequency = x[-1]
         self.centered_at = centered_at
+        self._frequencies = tuple(x)
+        self._values = tuple(y)
 
         if fun is None:
             x = [math.log(x_, Curve.log) for x_ in x]
@@ -87,6 +88,8 @@ class Curve:
         except ImportError as exc:
             raise RuntimeError("Plotting requires matplotlib. Install it with `pip install .[plot]`.") from exc
 
+        # Plotting samples the interpolated curve for a smooth visualization; this
+        # does not affect the curve's stored grid or any EQ calculation.
         x = Utils.log_spaced(self.starting_freq, self.max_frequency, 256)
         y = self(x)
         pyplot.figure(dpi=300, figsize=(8.4, 4.8))
@@ -116,9 +119,13 @@ class Curve:
         :param smoothing_factor:
         :return:
         """
-        x = Utils.log_spaced(self.starting_freq, self.max_frequency, self.res)
         return Curve(
-            x, Smoothing.smooth_1d(self(x), smoothing_factor)
+            self._frequencies,
+            Smoothing.smooth_1d(
+                self._frequencies,
+                self._values,
+                smoothing_factor,
+            ),
         )
 
     def to_deviation_curve(self, from_freq=100, to_freq=10000):
@@ -138,49 +145,46 @@ class Curve:
                 "Reference frequency range does not overlap the curve domain"
             )
 
-        points = Utils.log_spaced(reference_from, reference_to, count=128)
+        points = [
+            frequency for frequency in self._frequencies
+            if reference_from <= frequency <= reference_to
+        ]
+        if not points:
+            raise ValueError("Reference frequency range contains no curve points")
         avg = sum(self(points)) / len(points)
 
-        y = [self(x) - avg for x in self.domain_frequencies]
+        y = [value - avg for value in self._values]
         return Curve(
-            x=self.domain_frequencies,
+            x=self._frequencies,
             y=y,
             centered_at=avg
         )
 
     @property
-    def domain_frequencies(self, count=None):
-        if not count:
-            count = self.res
-        return Utils.log_spaced(self.starting_freq, self.max_frequency, count)
+    def domain_frequencies(self):
+        return list(self._frequencies)
+
+    @property
+    def domain_values(self):
+        return list(self._values)
 
     def __add__(self, other):
         start = max(self.starting_freq, other.starting_freq)
         end = min(self.max_frequency, other.max_frequency)
         if start >= end:
             raise ValueError("Curves do not have an overlapping frequency range")
-        points = Utils.log_spaced(start, end, self.res)
-
-        def new_fun(x):
-            return self.fun(x) + other.fun(x)
-
-        y = [new_fun(math.log(x, Curve.log)) for x in points]
-
-        return Curve(points, y, fun=new_fun)
+        points = _merged_frequency_grid(self, other, start, end)
+        y = [self(point) + other(point) for point in points]
+        return Curve(points, y)
 
     def __sub__(self, other):
         start = max(self.starting_freq, other.starting_freq)
         end = min(self.max_frequency, other.max_frequency)
         if start >= end:
             raise ValueError("Curves do not have an overlapping frequency range")
-        points = Utils.log_spaced(start, end, self.res)
-
-        def new_fun(x):
-            return self.fun(x) - other.fun(x)
-
-        y = [new_fun(math.log(x, Curve.log)) for x in points]
-
-        return Curve(points, y, fun=new_fun)
+        points = _merged_frequency_grid(self, other, start, end)
+        y = [self(point) - other(point) for point in points]
+        return Curve(points, y)
 
     @classmethod
     def build_average_curve(cls, curves: Collection['Curve'], smoothing_factor=Smoothing.SmoothingFactor.NO_SMOOTHING):
@@ -196,13 +200,27 @@ class Curve:
         if start >= end:
             raise ValueError("Curves do not have an overlapping frequency range")
 
-        points = Utils.log_spaced(start, end, cls.res)
+        points = sorted({
+            frequency
+            for curve in curves
+            for frequency in curve._frequencies
+            if start <= frequency <= end
+        } | {start, end})
         for Hz in points:
             dbs = [c(Hz) for c in curves]
             avg = Utils.avg([10 ** (db / 10) for db in dbs])
             y.append(math.log10(avg) * 10)
 
         return Curve(points, y)
+
+
+def _merged_frequency_grid(left, right, start, end):
+    return sorted({
+        frequency
+        for curve in (left, right)
+        for frequency in curve._frequencies
+        if start <= frequency <= end
+    } | {start, end})
 
 
 def _validate_frequency(value):
