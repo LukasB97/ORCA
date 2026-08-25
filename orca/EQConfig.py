@@ -1,3 +1,5 @@
+import math
+from numbers import Real
 from typing import Callable
 
 from . import WeightingFuns
@@ -18,12 +20,28 @@ class EQConfig:
             if not eq_res:
                 raise ValueError("Either eq_res or eq_points must be specified")
             eq_points = log_spaced_ints(eq_from, eq_to, eq_res)
-        if not eq_points:
-            raise ValueError("eq_points cannot be empty")
+        try:
+            eq_points = tuple(float(point) for point in eq_points)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("eq_points must contain numeric frequencies") from exc
+        if len(eq_points) < 2:
+            raise ValueError("eq_points must contain at least two frequencies")
+        if any(not math.isfinite(point) or point <= 0 for point in eq_points):
+            raise ValueError("eq_points must contain finite frequencies greater than 0")
+        if any(left >= right for left, right in zip(eq_points, eq_points[1:])):
+            raise ValueError("eq_points must be strictly increasing without duplicates")
+        if not isinstance(set_max_zero, bool):
+            raise ValueError("set_max_zero must be a boolean")
+        if isinstance(max_boost, bool) or not isinstance(max_boost, Real):
+            raise ValueError("max_boost must be a finite number")
+        if not math.isfinite(max_boost):
+            raise ValueError("max_boost must be a finite number")
+        if not callable(weighting_fun):
+            raise ValueError("weighting_fun must be callable")
 
         self.eq_points = eq_points
         self.set_max_zero = set_max_zero
-        self.max_boost = max_boost
+        self.max_boost = float(max_boost)
         self.weighting_fun = weighting_fun
 
 

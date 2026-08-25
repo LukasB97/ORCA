@@ -1,7 +1,7 @@
 import math
 from typing import List
 
-from scipy.optimize import shgo
+from scipy.optimize import minimize_scalar
 
 from .EQConfig import EQConfig
 from .Measurement import Measurement
@@ -36,10 +36,14 @@ def minimize(target, spl):
     if math.isclose(lower, upper):
         return lower
 
-    result = shgo(fun_to_minimize, bounds=[(lower, upper)])
+    result = minimize_scalar(
+        fun_to_minimize,
+        bounds=(lower, upper),
+        method="bounded",
+    )
     if not result.success:
         raise RuntimeError(f"Boost optimization failed: {result.message}")
-    return result.x[0]
+    return result.x
 
 
 def calc_boost(
