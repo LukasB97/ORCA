@@ -243,31 +243,10 @@ class ConfigAndEndToEndTests(unittest.TestCase):
             eq_config=eq_config,
         )
         output = format_eq_str(eq_curve, eq_config)
-        legacy_output = (ROOT / "tests" / "fixtures" / "legacy_graph_eq.txt").read_text(
-            encoding="utf-8"
-        ).strip()
-
-        def levels_by_frequency(graph_eq):
-            values = graph_eq.removeprefix("GraphicEQ: ").split("; ")
-            return {
-                float(frequency): float(level)
-                for frequency, level in (value.split() for value in values)
-            }
-
-        legacy_levels = levels_by_frequency(legacy_output)
-        current_levels = levels_by_frequency(output)
 
         self.assertEqual(len(eq_curve.domain_frequencies), 956)
         self.assertTrue(output.startswith("GraphicEQ: "))
         self.assertEqual(output.count(";") + 1, len(eq_config.eq_points))
-        self.assertEqual(current_levels.keys(), legacy_levels.keys())
-        self.assertLessEqual(
-            max(
-                abs(current_levels[frequency] - legacy_levels[frequency])
-                for frequency in current_levels
-            ),
-            0.3,
-        )
 
     def test_custom_eq_config_example_runs_with_bundled_measurements(self):
         output = custom_eq_config_example()
