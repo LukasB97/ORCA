@@ -7,10 +7,6 @@ def avg(elements):
     return sum(elements) / len(elements)
 
 
-def median(elements):
-    return np.median(elements)
-
-
 def log_spaced(start, end, count=128):
     return np.logspace(
         math.log10(start),

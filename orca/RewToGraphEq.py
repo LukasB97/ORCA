@@ -1,4 +1,5 @@
 import math
+import sys
 from typing import List
 
 import numpy as np
@@ -231,7 +232,8 @@ def _estimate_error_stats(
         alignment = " level-aligned" if align_level else ""
         print(
             f"{label}{alignment} mean absolute deviation from target: {mean:.1f} dB; "
-            f"95th percentile: {percentile_95:.1f} dB"
+            f"95th percentile: {percentile_95:.1f} dB",
+            file=sys.stderr,
         )
     return mean, percentile_95
 

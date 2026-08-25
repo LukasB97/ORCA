@@ -45,14 +45,16 @@ in the 20-20000 Hz range.
 
 Measurements are level-normalized against the shared 100-10000 Hz range by default. This avoids
 letting bass roll-off, room modes, or high-frequency directivity dominate the level reference.
-All supplied measurements must use the same logarithmic frequency grid. ORCA evaluates the
-equalizer at every point of that native measurement grid while optimizing only the GraphicEQ
-control points that will actually be exported.
+All positive frequencies from the REW export are preserved, including values below 20 Hz. All
+supplied measurements must use the same logarithmic frequency grid. ORCA evaluates the equalizer
+at every point of that native measurement grid while optimizing only the GraphicEQ control points
+that will actually be exported.
 
 With `verbose=True` (or the CLI's `--verbose` flag), ORCA reports the level-aligned mean absolute
 deviation from the target and its 95th percentile for both the original and estimated equalized
-response. Level alignment excludes the overall playback-volume change introduced by anchoring the
-maximum EQ gain at 0 dB while retaining every frequency-dependent error.
+response. Diagnostics are written to standard error so standard output remains a valid GraphicEQ
+definition. Level alignment excludes the overall playback-volume change introduced by anchoring
+the maximum EQ gain at 0 dB while retaining every frequency-dependent error.
 
 More examples on the usage, are in the examples.py
 
@@ -89,6 +91,7 @@ EQ-Config
         gets anchored at 0 dB, in order not to introduce distortion. The complete
         curve is shifted, so the relative differences between EQ points are preserved.
         max_boost=10: the maximum dB boost that will be applied when set_max_zero=False.
+        Must have at most one decimal place to match the exported GraphicEQ gains.
         weighting_fun: function that applies weighting based on smoothing factor and frequency
 
 ## Development
