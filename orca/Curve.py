@@ -199,8 +199,8 @@ class Curve:
         points = Utils.log_spaced(start, end, cls.res)
         for Hz in points:
             dbs = [c(Hz) for c in curves]
-            avg = Utils.avg([cls.log ** (db / 10) for db in dbs])  # Transform log-scale
-            y.append(math.log(avg, cls.log) * 10)
+            avg = Utils.avg([10 ** (db / 10) for db in dbs])
+            y.append(math.log10(avg) * 10)
 
         return Curve(points, y)
 

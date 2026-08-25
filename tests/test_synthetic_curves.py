@@ -68,6 +68,29 @@ class SyntheticCurveTests(unittest.TestCase):
 
         self.assertAlmostEqual(float(eq(1000)), 0, delta=1)
 
+    def test_measurement_order_does_not_change_frequency_weighting(self):
+        wide = Measurement(Curve([20, 20000], [10, 10]))
+        narrow = Measurement(Curve([100, 10000], [10, 10]))
+        config = EQConfig(
+            eq_points=[100, 1000, 10000],
+            set_max_zero=False,
+            weighting_fun=lambda iteration, pos: pos,
+        )
+
+        wide_first = calc_eq_curve(
+            [wide, narrow], TargetCurves.linear(), config, res=3
+        )
+        narrow_first = calc_eq_curve(
+            [narrow, wide], TargetCurves.linear(), config, res=3
+        )
+
+        for frequency in (100, 1000, 10000):
+            self.assertAlmostEqual(
+                float(wide_first(frequency)),
+                float(narrow_first(frequency)),
+                places=6,
+            )
+
     def test_deviation_curve_uses_midband_reference_not_full_range(self):
         bass_heavy = Curve([20, 100, 1000, 10000], [20, 0, 0, 0])
 

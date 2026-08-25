@@ -1,5 +1,6 @@
 import contextlib
 import io
+import math
 import subprocess
 import sys
 import tempfile
@@ -13,6 +14,7 @@ from orca.FileReader import curve_from_rew_file, get_files, read_hz_and_spl
 from orca.BoostComputation import minimize
 from orca.RewToGraphEq import _build_deviation_curves, format_eq_str, get_graph_eq_str
 from orca.Utils import log_spaced_ints
+from examples import custom_eq_config_example
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -80,6 +82,15 @@ class ImportAndCurveTests(unittest.TestCase):
             left + right
         with self.assertRaisesRegex(ValueError, "overlapping"):
             Curve.build_average_curve([left, right])
+
+    def test_average_curve_uses_decibel_power_scale(self):
+        quiet = Curve([100, 1000], [0, 0])
+        loud = Curve([100, 1000], [10, 10])
+
+        average = Curve.build_average_curve([quiet, loud])
+
+        expected = 10 * math.log10((10 ** (0 / 10) + 10 ** (10 / 10)) / 2)
+        self.assertAlmostEqual(float(average(100)), expected, places=6)
 
 
 class FileReaderTests(unittest.TestCase):
@@ -152,6 +163,14 @@ class FileReaderTests(unittest.TestCase):
         self.assertEqual(len(files), 5)
         self.assertTrue(all(Path(file).suffix == ".txt" for file in files))
 
+    def test_get_files_does_not_mutate_supplied_file_list(self):
+        supplied_files = [str(EXAMPLE_MEASUREMENTS / "Sep 13.txt")]
+        original_files = supplied_files.copy()
+
+        get_files(dir_path=str(EXAMPLE_MEASUREMENTS), file_paths=supplied_files)
+
+        self.assertEqual(supplied_files, original_files)
+
     def test_get_files_rejects_missing_inputs(self):
         with self.assertRaises(ValueError):
             get_files()
@@ -182,6 +201,11 @@ class ConfigAndEndToEndTests(unittest.TestCase):
 
         self.assertTrue(output.startswith("GraphicEQ: "))
         self.assertEqual(output.count(";") + 1, len(eq_config.eq_points))
+
+    def test_custom_eq_config_example_runs_with_bundled_measurements(self):
+        output = custom_eq_config_example(calculation_res=16)
+
+        self.assertTrue(output.startswith("GraphicEQ: "))
 
     def test_format_eq_rejects_points_far_outside_curve_domain(self):
         curve = Curve([100, 10000], [0, 0])

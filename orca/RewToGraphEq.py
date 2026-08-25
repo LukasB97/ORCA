@@ -82,7 +82,8 @@ def calc_eq_curve(measurements: List[Measurement], target_curve: Curve, eq_confi
                 measurements,
                 hz_value,
                 target_curve(hz_value),
-                eq_config
+                eq_config,
+                frequency_range=(eq_from, eq_to),
             )
         )
     return Curve(eq_points, eq_level)
