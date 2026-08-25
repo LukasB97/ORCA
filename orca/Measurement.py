@@ -1,17 +1,40 @@
-from typing import Dict
+from __future__ import annotations
+
+from collections.abc import Iterable
+from typing import SupportsFloat, overload
 
 from .Curve import Curve
 from .Smoothing import SmoothingFactor
 
 
 class Measurement:
-    _curves: Dict[int, Curve]
+    _curves: dict[int, Curve]
 
-    def __init__(self, curve):
-        self._curves = dict()
+    def __init__(self, curve: Curve) -> None:
+        self._curves = {}
         self._curves[0] = curve
 
-    def eval(self, hz, smoothing_factor: SmoothingFactor = SmoothingFactor.NO_SMOOTHING):
+    @overload
+    def eval(
+        self,
+        hz: SupportsFloat,
+        smoothing_factor: SmoothingFactor = SmoothingFactor.NO_SMOOTHING,
+    ) -> float:
+        ...
+
+    @overload
+    def eval(
+        self,
+        hz: Iterable[SupportsFloat],
+        smoothing_factor: SmoothingFactor = SmoothingFactor.NO_SMOOTHING,
+    ) -> list[float]:
+        ...
+
+    def eval(
+        self,
+        hz: SupportsFloat | Iterable[SupportsFloat],
+        smoothing_factor: SmoothingFactor = SmoothingFactor.NO_SMOOTHING,
+    ) -> float | list[float]:
         if smoothing_factor.value in self._curves:
             return self._curves[smoothing_factor.value](hz)
         smoothed_curve = self._curves[0].smooth(smoothing_factor)
@@ -19,5 +42,5 @@ class Measurement:
         return smoothed_curve(hz)
 
     @property
-    def curve(self):
+    def curve(self) -> Curve:
         return self._curves[0]

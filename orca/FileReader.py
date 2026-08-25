@@ -1,12 +1,15 @@
+from __future__ import annotations
+
 import os
 import math
+from collections.abc import Iterable
 from pathlib import Path
-from typing import List
+from os import PathLike
 
 from .Curve import Curve
 
 
-def _parse_rew_float(value, raw_line):
+def _parse_rew_float(value: str, raw_line: str) -> float:
     try:
         return float(value)
     except ValueError:
@@ -18,7 +21,7 @@ def _parse_rew_float(value, raw_line):
         raise ValueError(f"Invalid REW data row: {raw_line!r}")
 
 
-def read_hz_and_spl(rew_str):
+def read_hz_and_spl(rew_str: str) -> tuple[list[float], list[float]]:
     """
     Reads the (Hz, dB) pairs from the text in the exported rew file
     :param rew_str:
@@ -57,14 +60,14 @@ def read_hz_and_spl(rew_str):
     return frequencies, sp_levels
 
 
-def get_all_txt_files(dir_path):
+def get_all_txt_files(dir_path: str | PathLike[str]) -> list[str]:
     path = Path(dir_path)
     if not path.is_dir():
         raise ValueError(f"Measurement directory does not exist: {dir_path}")
     return [str(file_path) for file_path in sorted(path.glob("*.txt"))]
 
 
-def curve_from_rew_file(rew_file_path):
+def curve_from_rew_file(rew_file_path: str | PathLike[str]) -> Curve:
     path = Path(rew_file_path)
     if not path.is_file():
         raise ValueError(f"Measurement file does not exist: {rew_file_path}")
@@ -77,7 +80,10 @@ def curve_from_rew_file(rew_file_path):
     return Curve(frequencies, sp_levels)
 
 
-def get_files(dir_path=None, file_paths: List[str] = None):
+def get_files(
+    dir_path: str | PathLike[str] | None = None,
+    file_paths: Iterable[str | PathLike[str]] | str | PathLike[str] | None = None,
+) -> list[str]:
     if not file_paths and not dir_path:
         raise ValueError("dir_path and file_paths cannot both be None")
     if not file_paths:

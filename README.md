@@ -80,10 +80,10 @@ Just pass your own EQConfig to get_graph_eq_str or create_eq
 
 EQ-Config
 
-        eq_from=20: Lower bound for eq frequencies
-        eq_to=20000: Upper bound for eq frequencies
-        eq_res=128: The number of eq points.
-        If supplied, eq_res log-spaced points will be computed between eq_from and eq_to.
+        from orca.EQConfig import EQConfig
+
+        EQConfig.from_range(eq_from=20, eq_to=20000, eq_res=128): Creates a config
+        with eq_res log-spaced integer points between the supplied frequency bounds.
         
         eq_points: Can be supplied instead of eq_from, eq_to and eq_res. They must be
         finite, positive, unique, and strictly increasing.
@@ -94,11 +94,22 @@ EQ-Config
         Must have at most one decimal place to match the exported GraphicEQ gains.
         weighting_fun: function that applies weighting based on smoothing factor and frequency
 
+Wavelet's fixed GraphicEQ frequency layout lives in its own module:
+
+        from orca.Wavelet import config as wavelet_config
+
+        eq_config = wavelet_config()
+
 ## Development
 
 Run the complete test suite from the repository root with:
 
         python -m unittest discover -v
+
+Install the development dependencies and run the strict type check with:
+
+        pip install -e ".[dev]"
+        python -m mypy
 
 
 ## The Algorithm
