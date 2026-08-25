@@ -102,6 +102,40 @@ class SyntheticCurveTests(unittest.TestCase):
         self.assertEqual(eq.domain_frequencies, [100, 800])
         self.assertLess(float(corrected_peak), 10)
 
+    def test_dense_control_grid_has_no_unobserved_point_gains(self):
+        measurement = Measurement(Curve([100, 1000, 10000], [10, 10, 10]))
+        control_points = [
+            100, 200, 400, 800, 1000, 2000, 4000, 8000, 10000,
+        ]
+        config = EQConfig(
+            eq_points=control_points,
+            set_max_zero=False,
+            weighting_fun=WeightingFuns.no_smoothing(),
+        )
+
+        eq = calc_eq_curve(
+            [measurement],
+            TargetCurves.linear(),
+            config,
+        )
+
+        np.testing.assert_allclose(eq.domain_values, -10, atol=0.01)
+
+    def test_zero_anchor_uses_full_grid_when_reference_band_is_absent(self):
+        measurement = Measurement(Curve([20, 40, 80], [0, 0, 0]))
+        config = EQConfig(
+            eq_points=[20, 80],
+            weighting_fun=WeightingFuns.no_smoothing(),
+        )
+
+        eq = calc_eq_curve(
+            [measurement],
+            TargetCurves.linear(),
+            config,
+        )
+
+        np.testing.assert_allclose(eq.domain_values, 0, atol=0.01)
+
     def test_octave_smoothing_is_independent_of_measurement_density(self):
         def build_curve(points_per_octave):
             frequencies = np.logspace(

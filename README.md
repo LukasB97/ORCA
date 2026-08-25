@@ -102,8 +102,11 @@ Run the complete test suite from the repository root with:
 
 To compute an equalizer, ORCA optimizes the configured GraphicEQ control-point gains directly.
 The piecewise-linear curve produced by those points is evaluated at every frequency in the
-original measurement grid, so the optimization sees the same finite-resolution filter that
-will later be exported.
+original measurement grid. If that grid is too sparse to constrain every control-point gain,
+ORCA supplements it with the configured control frequencies. This ensures that the optimization
+sees every degree of freedom in the same finite-resolution filter that will later be exported. If
+a direct API caller supplies a grid outside the normal 100-10000 Hz reference band, ORCA uses the
+complete available grid for level alignment.
 
 For each of the frequencies, the process is as follows:
 

@@ -124,6 +124,17 @@ def _apply_output_constraints(levels, config):
     return np.minimum(levels, config.max_boost)
 
 
+def _reference_mask(frequencies):
+    frequencies = np.asarray(frequencies, dtype=float)
+    mask = (
+        (frequencies >= REFERENCE_FROM)
+        & (frequencies <= REFERENCE_TO)
+    )
+    if not np.any(mask):
+        mask = np.ones(len(frequencies), dtype=bool)
+    return mask
+
+
 def calc_eq_curve(measurements: List[Measurement], target_curve: Curve, eq_config: EQConfig.EQConfig):
     """
     Calculates a Graphic Equalizer for multiple measurements and a target curve.
@@ -142,22 +153,23 @@ def calc_eq_curve(measurements: List[Measurement], target_curve: Curve, eq_confi
     curves = [measurement.curve for measurement in measurements]
     measurement_points = _validate_measurement_grids(curves)
     eq_points = _validate_eq_points_in_range(curves[0], eq_config.eq_points)
-    interpolation = _build_interpolation_matrix(eq_points, measurement_points)
-    target_levels = np.asarray(target_curve(measurement_points), dtype=float)
+    evaluation_points = measurement_points
+    interpolation = _build_interpolation_matrix(eq_points, evaluation_points)
+    if np.linalg.matrix_rank(interpolation) < len(eq_points):
+        evaluation_points = sorted(set(measurement_points) | set(eq_points))
+        interpolation = _build_interpolation_matrix(eq_points, evaluation_points)
+    target_levels = np.asarray(target_curve(evaluation_points), dtype=float)
     normalized_positions = (
-        (np.log(measurement_points) - math.log(measurement_points[0]))
-        / (math.log(measurement_points[-1]) - math.log(measurement_points[0]))
+        (np.log(evaluation_points) - math.log(evaluation_points[0]))
+        / (math.log(evaluation_points[-1]) - math.log(evaluation_points[0]))
     )
     point_levels = np.zeros(len(eq_points), dtype=float)
-    reference_mask = (
-        (np.asarray(measurement_points) >= REFERENCE_FROM)
-        & (np.asarray(measurement_points) <= REFERENCE_TO)
-    )
+    reference_mask = _reference_mask(evaluation_points)
 
     for iteration, smoothing_factor in enumerate(SmoothingFactor):
         current_boost = interpolation @ point_levels
         measurement_levels = np.asarray([
-            measurement.eval(measurement_points, smoothing_factor)
+            measurement.eval(evaluation_points, smoothing_factor)
             for measurement in measurements
         ], dtype=float)
         iteration_targets = target_levels
@@ -201,12 +213,9 @@ def _estimate_error_stats(
 ):
     response_offset = 0.0
     if align_level:
-        reference_points = [
-            point for point in estimated_response.domain_frequencies
-            if REFERENCE_FROM <= point <= REFERENCE_TO
-        ]
-        if not reference_points:
-            raise ValueError("Error statistics require points in the reference range")
+        frequencies = estimated_response.domain_frequencies
+        mask = _reference_mask(frequencies)
+        reference_points = np.asarray(frequencies)[mask]
         response_offset = float(np.mean(
             np.asarray(target(reference_points))
             - np.asarray(estimated_response(reference_points))
