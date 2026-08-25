@@ -78,9 +78,16 @@ EQ-Config
         eq_points: Can be supplied instead of eq_from, eq_to and eq_res. In this case,
         the eq points are supplied instead of being computed
         set_max_zero=True: Determines, if the max boost value of the created eq
-        get anchored at 0 db, in order not to introduce distortion
-        max_boost=10: the maximum db boost that will be applied.
+        gets anchored at 0 dB, in order not to introduce distortion. The complete
+        curve is shifted, so the relative differences between EQ points are preserved.
+        max_boost=10: the maximum dB boost that will be applied when set_max_zero=False.
         weighting_fun: function that applies weighting based on smooting factor and frequency
+
+## Development
+
+Run the complete test suite from the repository root with:
+
+        python -m unittest discover -v
 
 
 ## The Algorithm

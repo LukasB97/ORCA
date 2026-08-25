@@ -147,11 +147,12 @@ def format_eq_str(eq_curve: Curve, config=None):
 
     eq_points = _validate_eq_points_in_range(eq_curve, config.eq_points)
     level_adjustments = [float(level) for level in eq_curve(eq_points)]
-    level_adjustments = [min(level, config.max_boost) for level in level_adjustments]
 
     if config.set_max_zero:
         max_boost = max(level_adjustments)
         level_adjustments = [l - max_boost for l in level_adjustments]
+    else:
+        level_adjustments = [min(level, config.max_boost) for level in level_adjustments]
 
     str_adjustments = ['%.1f' % level for level in level_adjustments]
     eq_points = map(lambda point: "%g" % point, eq_points)
