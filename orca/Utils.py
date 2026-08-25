@@ -1,6 +1,5 @@
 import math
 
-import numpy
 import numpy as np
 
 
@@ -9,7 +8,7 @@ def avg(elements):
 
 
 def median(elements):
-    return numpy.median(elements)
+    return np.median(elements)
 
 
 def log_spaced(start, end, count=128):

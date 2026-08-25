@@ -8,7 +8,7 @@ to improve the in-room FR of a loudspeaker.
 This algorithm creates a config for a detailed graphical equalizer that can be
 imported into software equalizers like EQApo or Wavelet.
 
-This is especially useful when you want to do room correction for a bluetooth speaker
+This is especially useful when you want to do room correction for a Bluetooth speaker
 (Wavelet)
 
 You can customize the target curve and certain parameters of equalizer you want to create.
@@ -26,7 +26,7 @@ If you want to use diagnostic plots, install the optional plotting dependency:
 
         pip install -e ".[plot]"
 
-The simplest way is to either supply a list of paths to req files or a directory with the files.
+The simplest way is to either supply a list of paths to REW files or a directory with the files.
 
         from orca.RewToGraphEq import get_graph_eq_str
 
@@ -45,8 +45,14 @@ in the 20-20000 Hz range.
 
 Measurements are level-normalized against the shared 100-10000 Hz range by default. This avoids
 letting bass roll-off, room modes, or high-frequency directivity dominate the level reference.
-All supplied measurements must use the same logarithmic frequency grid. ORCA keeps that native
-measurement resolution throughout the calculation instead of resampling it to a fixed grid.
+All supplied measurements must use the same logarithmic frequency grid. ORCA evaluates the
+equalizer at every point of that native measurement grid while optimizing only the GraphicEQ
+control points that will actually be exported.
+
+With `verbose=True` (or the CLI's `--verbose` flag), ORCA reports the level-aligned mean absolute
+deviation from the target and its 95th percentile for both the original and estimated equalized
+response. Level alignment excludes the overall playback-volume change introduced by anchoring the
+maximum EQ gain at 0 dB while retaining every frequency-dependent error.
 
 More examples on the usage, are in the examples.py
 
@@ -77,13 +83,13 @@ EQ-Config
         eq_res=128: The number of eq points.
         If supplied, eq_res log-spaced points will be computed between eq_from and eq_to.
         
-        eq_points: Can be supplied instead of eq_from, eq_to and eq_res. In this case,
-        the eq points are supplied instead of being computed
+        eq_points: Can be supplied instead of eq_from, eq_to and eq_res. They must be
+        finite, positive, unique, and strictly increasing.
         set_max_zero=True: Determines, if the max boost value of the created eq
         gets anchored at 0 dB, in order not to introduce distortion. The complete
         curve is shifted, so the relative differences between EQ points are preserved.
         max_boost=10: the maximum dB boost that will be applied when set_max_zero=False.
-        weighting_fun: function that applies weighting based on smooting factor and frequency
+        weighting_fun: function that applies weighting based on smoothing factor and frequency
 
 ## Development
 
@@ -94,8 +100,10 @@ Run the complete test suite from the repository root with:
 
 ## The Algorithm
 
-To compute an equalizer, one boost level is evaluated for every frequency point in the
-original measurement grid.
+To compute an equalizer, ORCA optimizes the configured GraphicEQ control-point gains directly.
+The piecewise-linear curve produced by those points is evaluated at every frequency in the
+original measurement grid, so the optimization sees the same finite-resolution filter that
+will later be exported.
 
 For each of the frequencies, the process is as follows:
 
@@ -103,16 +111,15 @@ We take a strongly smoothed version of each measurement. Smoothing widths are de
 octaves, so they do not change when the measurement grid has a different point density,
 and compare the level of our target curve to the current spl.
 
-We look for a dB adjustment at this frequency to minimize the
-error between target-spl and equalized-spl. This is a classical example of a
-convex optimization problem. You can find more on this in
-the Algorithm PDF.
+We look for a dB adjustment at every measured frequency to minimize the error between target SPL
+and equalized SPL. A least-squares projection then finds the GraphicEQ point updates whose
+interpolated curve best realizes those adjustments over the complete measurement grid.
 
 
 In multiple iterations, the boost gets adjusted, by
 repeating the above process with decreasingly smoothed measurements.
 
-In each iteration, we take the difference, between the current level + dB adjustment
+In each iteration, we take the difference between the current level + dB adjustment
 and the target level.
 
 This difference gets weighted and added to the current dB adjustment.

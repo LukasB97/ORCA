@@ -7,7 +7,7 @@ from orca.BoostComputation import minimize
 from orca.Curve import Curve
 from orca.EQConfig import EQConfig
 from orca.Measurement import Measurement
-from orca.RewToGraphEq import calc_eq_curve
+from orca.RewToGraphEq import _build_interpolation_matrix, calc_eq_curve
 from orca.Smoothing import SmoothingFactor
 
 
@@ -20,6 +20,22 @@ def _config_for_synthetic_tests():
 
 
 class SyntheticCurveTests(unittest.TestCase):
+    def test_graphic_eq_interpolation_uses_log_frequency(self):
+        interpolation = _build_interpolation_matrix(
+            [100, 800],
+            [100, 200, 400, 800],
+        )
+
+        np.testing.assert_allclose(
+            interpolation,
+            [
+                [1, 0],
+                [2 / 3, 1 / 3],
+                [1 / 3, 2 / 3],
+                [0, 1],
+            ],
+        )
+
     def test_flat_measurement_needs_no_eq(self):
         measurement = Measurement(Curve([100, 1000, 10000], [0, 0, 0]))
 
@@ -66,6 +82,25 @@ class SyntheticCurveTests(unittest.TestCase):
         )
 
         self.assertAlmostEqual(float(eq(1000)), 0, delta=1)
+
+    def test_eq_optimizes_only_configured_control_points(self):
+        frequencies = [100, 200, 400, 800]
+        measurement = Measurement(Curve(frequencies, [0, 10, 0, 0]))
+        config = EQConfig(
+            eq_points=[100, 800],
+            set_max_zero=False,
+            weighting_fun=WeightingFuns.no_smoothing(),
+        )
+
+        eq = calc_eq_curve(
+            [measurement],
+            TargetCurves.linear(),
+            config,
+        )
+        corrected_peak = measurement.curve(200) + eq(200)
+
+        self.assertEqual(eq.domain_frequencies, [100, 800])
+        self.assertLess(float(corrected_peak), 10)
 
     def test_octave_smoothing_is_independent_of_measurement_density(self):
         def build_curve(points_per_octave):

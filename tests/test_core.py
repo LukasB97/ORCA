@@ -14,7 +14,9 @@ from orca.FileReader import curve_from_rew_file, get_files, read_hz_and_spl
 from orca.BoostComputation import minimize
 from orca.RewToGraphEq import (
     _build_deviation_curves,
+    _estimate_error_stats,
     _validate_measurement_grids,
+    build_export_curve,
     create_eq,
     format_eq_str,
 )
@@ -244,9 +246,66 @@ class ConfigAndEndToEndTests(unittest.TestCase):
         )
         output = format_eq_str(eq_curve, eq_config)
 
-        self.assertEqual(len(eq_curve.domain_frequencies), 956)
+        self.assertEqual(eq_curve.domain_frequencies, list(eq_config.eq_points))
+        self.assertAlmostEqual(max(eq_curve.domain_values), 0.0, places=9)
         self.assertTrue(output.startswith("GraphicEQ: "))
         self.assertEqual(output.count(";") + 1, len(eq_config.eq_points))
+        levels = {
+            float(frequency): float(level)
+            for frequency, level in (
+                point.split()
+                for point in output.removeprefix("GraphicEQ: ").split("; ")
+            )
+        }
+        expected_levels = {
+            20: -2.0,
+            29: -0.8,
+            1004: -4.5,
+            9862: -4.8,
+            20000: -2.5,
+        }
+        for frequency, expected in expected_levels.items():
+            self.assertAlmostEqual(levels[frequency], expected, delta=0.2)
+
+    def test_custom_eq_points_accept_iterables_and_are_immutable(self):
+        config = EQConfig(eq_points=(point for point in [100, 1000, 10000]))
+
+        self.assertEqual(config.eq_points, (100.0, 1000.0, 10000.0))
+
+    def test_custom_eq_points_must_be_strictly_increasing(self):
+        invalid_points = (
+            [1000, 100],
+            [100, 100, 1000],
+        )
+
+        for points in invalid_points:
+            with self.subTest(points=points):
+                with self.assertRaisesRegex(ValueError, "strictly increasing"):
+                    EQConfig(eq_points=points)
+
+    def test_custom_eq_points_must_be_finite_and_positive(self):
+        invalid_points = (
+            [0, 100],
+            [100, float("inf")],
+            [100, float("nan")],
+        )
+
+        for points in invalid_points:
+            with self.subTest(points=points):
+                with self.assertRaisesRegex(ValueError, "finite frequencies"):
+                    EQConfig(eq_points=points)
+
+    def test_eq_config_rejects_invalid_output_options(self):
+        invalid_options = (
+            {"set_max_zero": 1},
+            {"max_boost": float("nan")},
+            {"weighting_fun": None},
+        )
+
+        for options in invalid_options:
+            with self.subTest(options=options):
+                with self.assertRaises(ValueError):
+                    EQConfig(**options)
 
     def test_custom_eq_config_example_runs_with_bundled_measurements(self):
         output = custom_eq_config_example()
@@ -287,6 +346,46 @@ class ConfigAndEndToEndTests(unittest.TestCase):
         )
 
         self.assertEqual(format_eq_str(curve, config), "GraphicEQ: 100 10.0; 1000 10.0")
+
+    def test_export_curve_is_the_curve_serialized_by_formatter(self):
+        curve = Curve([100, 200, 1000], [0, 20, 0])
+        config = EQConfig(
+            eq_points=[100, 1000],
+            set_max_zero=False,
+            max_boost=10,
+        )
+
+        exported = build_export_curve(curve, config)
+
+        self.assertEqual(exported.domain_frequencies, [100, 1000])
+        self.assertEqual(exported.domain_values, [0, 0])
+        self.assertEqual(format_eq_str(curve, config), "GraphicEQ: 100 0.0; 1000 0.0")
+
+    def test_error_stats_report_mean_and_95th_percentile(self):
+        target = Curve([100, 10000], [0, 0])
+        response = Curve([100, 1000, 10000], [0, 0, 100])
+
+        mean, percentile_95 = _estimate_error_stats(
+            target,
+            response,
+            "Response",
+        )
+
+        self.assertEqual(mean, 33.3)
+        self.assertEqual(percentile_95, 90.0)
+
+    def test_error_stats_can_ignore_overall_playback_level(self):
+        target = Curve([100, 1000, 10000], [0, 0, 0])
+        response = Curve([100, 1000, 10000], [-10, -10, -10])
+
+        mean, percentile_95 = _estimate_error_stats(
+            target,
+            response,
+            "Response",
+            align_level=True,
+        )
+
+        self.assertEqual((mean, percentile_95), (0.0, 0.0))
 
     def test_measurements_need_reference_range_overlap(self):
         with self.assertRaisesRegex(ValueError, "reference range"):

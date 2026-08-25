@@ -1,7 +1,10 @@
+import math
 from typing import List
 
-from . import TargetCurves, EQConfig, Utils
-from .BoostComputation import calc_boost
+import numpy as np
+
+from . import TargetCurves, EQConfig
+from .BoostComputation import minimize
 from .Curve import Curve
 from .FileReader import curve_from_rew_file, get_files
 from .Measurement import Measurement
@@ -88,46 +91,153 @@ def _validate_eq_points_in_range(eq_curve: Curve, eq_points):
     return points
 
 
+def _build_interpolation_matrix(control_points, evaluation_points):
+    """Map GraphicEQ control-point gains to a logarithmic evaluation grid."""
+    control_points = np.asarray(control_points, dtype=float)
+    evaluation_points = np.asarray(evaluation_points, dtype=float)
+    log_controls = np.log2(control_points)
+    log_evaluations = np.log2(evaluation_points)
+    matrix = np.zeros((len(evaluation_points), len(control_points)))
+
+    for row, value in enumerate(log_evaluations):
+        if value <= log_controls[0]:
+            matrix[row, 0] = 1.0
+            continue
+        if value >= log_controls[-1]:
+            matrix[row, -1] = 1.0
+            continue
+
+        right = int(np.searchsorted(log_controls, value, side="right"))
+        left = right - 1
+        width = log_controls[right] - log_controls[left]
+        right_weight = (value - log_controls[left]) / width
+        matrix[row, left] = 1.0 - right_weight
+        matrix[row, right] = right_weight
+
+    return matrix
+
+
+def _apply_output_constraints(levels, config):
+    levels = np.asarray(levels, dtype=float)
+    if config.set_max_zero:
+        return levels - np.max(levels)
+    return np.minimum(levels, config.max_boost)
+
+
 def calc_eq_curve(measurements: List[Measurement], target_curve: Curve, eq_config: EQConfig.EQConfig):
     """
-    Calculates a Graphic Equalizer for multiple measurement and a target curve
+    Calculates a Graphic Equalizer for multiple measurements and a target curve.
+
+    The exported GraphicEQ point gains are optimized directly. Their interpolated
+    response is evaluated on every point of the measurements' native frequency grid.
+
     :param eq_config: configuration for the eq generation
     :param measurements: List of deviation curves
     :param target_curve: A curve that represents the eq target
-    :return: EQ curve on the measurements' native frequency grid
+    :return: EQ curve on the configured GraphicEQ point grid
     """
     if not measurements:
         raise ValueError("At least one measurement is required")
 
     curves = [measurement.curve for measurement in measurements]
-    eq_points = _validate_measurement_grids(curves)
-    eq_from, eq_to = eq_points[0], eq_points[-1]
-    eq_level = []
+    measurement_points = _validate_measurement_grids(curves)
+    eq_points = _validate_eq_points_in_range(curves[0], eq_config.eq_points)
+    interpolation = _build_interpolation_matrix(eq_points, measurement_points)
+    target_levels = np.asarray(target_curve(measurement_points), dtype=float)
+    normalized_positions = (
+        (np.log(measurement_points) - math.log(measurement_points[0]))
+        / (math.log(measurement_points[-1]) - math.log(measurement_points[0]))
+    )
+    point_levels = np.zeros(len(eq_points), dtype=float)
+    reference_mask = (
+        (np.asarray(measurement_points) >= REFERENCE_FROM)
+        & (np.asarray(measurement_points) <= REFERENCE_TO)
+    )
 
-    for hz_value in eq_points:
-        eq_level.append(
-            calc_boost(
-                measurements,
-                hz_value,
-                target_curve(hz_value),
-                eq_config,
-                frequency_range=(eq_from, eq_to),
+    for iteration, smoothing_factor in enumerate(SmoothingFactor):
+        current_boost = interpolation @ point_levels
+        measurement_levels = np.asarray([
+            measurement.eval(measurement_points, smoothing_factor)
+            for measurement in measurements
+        ], dtype=float)
+        iteration_targets = target_levels
+        if eq_config.set_max_zero:
+            target_offset = np.mean(
+                measurement_levels[:, reference_mask]
+                + current_boost[reference_mask]
+                - target_levels[reference_mask]
             )
+            iteration_targets = target_levels + target_offset
+        desired_updates = []
+        for index, target_level in enumerate(iteration_targets):
+            adjustment = minimize(
+                target_level,
+                list(measurement_levels[:, index] + current_boost[index]),
+            )
+            weight = eq_config.weighting_fun(
+                iteration,
+                float(normalized_positions[index]),
+            )
+            if not math.isfinite(weight):
+                raise ValueError("weighting_fun must return finite values")
+            desired_updates.append(adjustment * weight)
+
+        point_update, *_ = np.linalg.lstsq(
+            interpolation,
+            np.asarray(desired_updates),
+            rcond=None,
         )
-    return Curve(eq_points, eq_level)
+        point_levels = _apply_output_constraints(point_levels + point_update, eq_config)
+
+    return Curve(eq_points, point_levels)
 
 
-def _estimate_avg_err(target: Curve, estimated_response: Curve, start, verbose=False):
+def _estimate_error_stats(
+        target: Curve,
+        estimated_response: Curve,
+        label,
+        verbose=False,
+        align_level=False,
+):
+    response_offset = 0.0
+    if align_level:
+        reference_points = [
+            point for point in estimated_response.domain_frequencies
+            if REFERENCE_FROM <= point <= REFERENCE_TO
+        ]
+        if not reference_points:
+            raise ValueError("Error statistics require points in the reference range")
+        response_offset = float(np.mean(
+            np.asarray(target(reference_points))
+            - np.asarray(estimated_response(reference_points))
+        ))
+
     errs = []
     for point in estimated_response.domain_frequencies:
-        errs.append(abs(target(point) - estimated_response(point)))
+        errs.append(abs(target(point) - estimated_response(point) - response_offset))
 
-    med = round(Utils.median(errs), 1)
+    mean = round(float(np.mean(errs)), 1)
+    percentile_95 = round(float(np.percentile(errs, 95)), 1)
     if verbose:
-        print(start + " deviates ",
-              med,
-              " dB on average from the target")
-    return med
+        alignment = " level-aligned" if align_level else ""
+        print(
+            f"{label}{alignment} mean absolute deviation from target: {mean:.1f} dB; "
+            f"95th percentile: {percentile_95:.1f} dB"
+        )
+    return mean, percentile_95
+
+
+def build_export_curve(eq_curve: Curve, config=None):
+    """Return the exact point curve that is serialized as GraphicEQ."""
+    if config is None:
+        config = EQConfig.default()
+
+    eq_points = _validate_eq_points_in_range(eq_curve, config.eq_points)
+    level_adjustments = [float(level) for level in eq_curve(eq_points)]
+
+    level_adjustments = _apply_output_constraints(level_adjustments, config)
+
+    return Curve(eq_points, level_adjustments)
 
 
 def create_eq(
@@ -151,7 +261,13 @@ def create_eq(
     avg = Curve.build_average_curve(curves)
     if draw:
         avg.smooth(SmoothingFactor.LIGHT_SMOOTHING).draw("Averaged Frequency Response of all Measurements")
-    _estimate_avg_err(target_curve, avg, "The current fr", verbose=verbose)
+    _estimate_error_stats(
+        target_curve,
+        avg,
+        "Current frequency response",
+        verbose=verbose,
+        align_level=True,
+    )
 
     measurements = list(map(Measurement, curves))
 
@@ -159,31 +275,32 @@ def create_eq(
     if draw:
         target_curve.draw("Target Curve")
     eq_curve = calc_eq_curve(measurements, target_curve, eq_config)
-    estimated_fr = eq_curve + avg
-    estimated_fr = estimated_fr.smooth(SmoothingFactor.LIGHT_SMOOTHING)
+    export_curve = build_export_curve(eq_curve, eq_config)
+    estimated_eq = Curve(
+        avg.domain_frequencies,
+        export_curve(avg.domain_frequencies),
+    )
+    estimated_fr = estimated_eq + avg
     if draw:
-        estimated_fr.draw("Estimated Frequency Response after Equalization")
+        estimated_fr.smooth(SmoothingFactor.LIGHT_SMOOTHING).draw(
+            "Estimated Frequency Response after Equalization"
+        )
 
-    _estimate_avg_err(target_curve, estimated_fr, "The estimated", verbose=verbose)
+    _estimate_error_stats(
+        target_curve,
+        estimated_fr,
+        "Estimated equalized response",
+        verbose=verbose,
+        align_level=eq_config.set_max_zero,
+    )
 
     return eq_curve
 
 
 def format_eq_str(eq_curve: Curve, config=None):
-    if config is None:
-        config = EQConfig.default()
-
-    eq_points = _validate_eq_points_in_range(eq_curve, config.eq_points)
-    level_adjustments = [float(level) for level in eq_curve(eq_points)]
-
-    if config.set_max_zero:
-        max_boost = max(level_adjustments)
-        level_adjustments = [l - max_boost for l in level_adjustments]
-    else:
-        level_adjustments = [min(level, config.max_boost) for level in level_adjustments]
-
-    str_adjustments = ['%.1f' % level for level in level_adjustments]
-    eq_points = map(lambda point: "%g" % point, eq_points)
+    export_curve = build_export_curve(eq_curve, config)
+    str_adjustments = ['%.1f' % level for level in export_curve.domain_values]
+    eq_points = map(lambda point: "%g" % point, export_curve.domain_frequencies)
 
     freq_boost_tuples = zip(eq_points, str_adjustments)
     combo = map(" ".join, freq_boost_tuples)
