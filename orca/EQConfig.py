@@ -36,6 +36,9 @@ class EQConfig:
             raise ValueError("max_boost must be a finite number")
         if not math.isfinite(max_boost):
             raise ValueError("max_boost must be a finite number")
+        scaled_max_boost = max_boost * 10
+        if scaled_max_boost != round(scaled_max_boost):
+            raise ValueError("max_boost must have at most one decimal place")
         if not callable(weighting_fun):
             raise ValueError("weighting_fun must be callable")
 

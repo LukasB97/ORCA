@@ -1,11 +1,6 @@
 import math
-from typing import List
 
 from scipy.optimize import minimize_scalar
-
-from .EQConfig import EQConfig
-from .Measurement import Measurement
-from .Smoothing import SmoothingFactor
 
 
 def _err(target, current, boost):
@@ -44,36 +39,4 @@ def minimize(target, spl):
     if not result.success:
         raise RuntimeError(f"Boost optimization failed: {result.message}")
     return result.x
-
-
-def calc_boost(
-        measurements: List[Measurement],
-        hz_value,
-        target_level,
-        eq_config: EQConfig,
-        frequency_range=None,
-):
-    if not measurements:
-        raise ValueError("At least one measurement is required")
-
-    if frequency_range is None:
-        frequency_range = (
-            max(measurement.curve.starting_freq for measurement in measurements),
-            min(measurement.curve.max_frequency for measurement in measurements),
-        )
-    starting_freq, max_frequency = frequency_range
-    if starting_freq >= max_frequency:
-        raise ValueError("Measurements do not have an overlapping frequency range")
-
-    normalized = (
-        (math.log(hz_value) - math.log(starting_freq))
-        / (math.log(max_frequency) - math.log(starting_freq))
-    )
-    boost = 0
-    for i, smoothing_factor in enumerate(SmoothingFactor):
-        sp_levels = [measurement.eval(hz_value, smoothing_factor) + boost for measurement in measurements]
-        adjustment = minimize(target_level, sp_levels)
-        boost = boost + adjustment * eq_config.weighting_fun(i, normalized)
-
-    return round(boost, 1)
 

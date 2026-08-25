@@ -5,6 +5,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from decimal import localcontext
+from fractions import Fraction
 from pathlib import Path
 
 from orca.cli import main
@@ -125,8 +127,8 @@ class FileReaderTests(unittest.TestCase):
 """
         frequencies, spl = read_hz_and_spl(content)
 
-        self.assertEqual(frequencies, [20.0, 30.0])
-        self.assertEqual(spl, [2.45, 3.51])
+        self.assertEqual(frequencies, [19.0, 20.0, 30.0])
+        self.assertEqual(spl, [1.0, 2.45, 3.51])
 
     def test_rew_parser_handles_decimal_commas(self):
         content = """
@@ -159,13 +161,25 @@ class FileReaderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "header"):
             read_hz_and_spl("20.0 1.0 0")
 
-    def test_rew_parser_rejects_missing_supported_frequencies(self):
+    def test_rew_parser_preserves_frequencies_below_20_hz(self):
         content = """
-* Freq(Hz) SPL(dB) Phase(degrees)
-10.0 1.0 0
-19.0 2.0 0
-"""
-        with self.assertRaisesRegex(ValueError, "at or above 20 Hz"):
+        * Freq(Hz) SPL(dB) Phase(degrees)
+        10.0 1.0 0
+        19.0 2.0 0
+        """
+
+        frequencies, spl = read_hz_and_spl(content)
+
+        self.assertEqual(frequencies, [10.0, 19.0])
+        self.assertEqual(spl, [1.0, 2.0])
+
+    def test_rew_parser_rejects_nonpositive_frequencies(self):
+        content = """
+        * Freq(Hz) SPL(dB) Phase(degrees)
+        0.0 1.0 0
+        """
+
+        with self.assertRaisesRegex(ValueError, "Invalid REW data row"):
             read_hz_and_spl(content)
 
     def test_rew_parser_rejects_non_finite_rows(self):
@@ -299,6 +313,7 @@ class ConfigAndEndToEndTests(unittest.TestCase):
         invalid_options = (
             {"set_max_zero": 1},
             {"max_boost": float("nan")},
+            {"max_boost": 0.05},
             {"weighting_fun": None},
         )
 
@@ -306,6 +321,23 @@ class ConfigAndEndToEndTests(unittest.TestCase):
             with self.subTest(options=options):
                 with self.assertRaises(ValueError):
                     EQConfig(**options)
+
+    def test_max_boost_validation_is_decimal_context_independent(self):
+        with localcontext() as context:
+            context.prec = 2
+            config = EQConfig()
+
+        self.assertEqual(config.max_boost, 10.0)
+
+    def test_max_boost_accepts_large_integers(self):
+        config = EQConfig(max_boost=10 ** 27)
+
+        self.assertEqual(config.max_boost, float(10 ** 27))
+
+    def test_max_boost_accepts_real_number_implementations(self):
+        config = EQConfig(max_boost=Fraction(1, 10))
+
+        self.assertEqual(config.max_boost, 0.1)
 
     def test_custom_eq_config_example_runs_with_bundled_measurements(self):
         output = custom_eq_config_example()
@@ -346,6 +378,16 @@ class ConfigAndEndToEndTests(unittest.TestCase):
         )
 
         self.assertEqual(format_eq_str(curve, config), "GraphicEQ: 100 10.0; 1000 10.0")
+
+    def test_format_eq_respects_single_decimal_max_boost(self):
+        curve = Curve([100, 1000], [0.06, 0.14])
+        config = EQConfig(
+            eq_points=[100, 1000],
+            max_boost=0.1,
+            set_max_zero=False,
+        )
+
+        self.assertEqual(format_eq_str(curve, config), "GraphicEQ: 100 0.1; 1000 0.1")
 
     def test_export_curve_is_the_curve_serialized_by_formatter(self):
         curve = Curve([100, 200, 1000], [0, 20, 0])
@@ -412,6 +454,22 @@ class ConfigAndEndToEndTests(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
                 main([])
+
+    def test_cli_verbose_keeps_stdout_machine_readable(self):
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            main([
+                "--measurements-dir",
+                str(EXAMPLE_MEASUREMENTS),
+                "--verbose",
+            ])
+
+        self.assertTrue(stdout.getvalue().startswith("GraphicEQ: "))
+        self.assertEqual(len(stdout.getvalue().strip().splitlines()), 1)
+        self.assertIn("Current frequency response", stderr.getvalue())
+        self.assertIn("Estimated equalized response", stderr.getvalue())
 
 
 if __name__ == "__main__":

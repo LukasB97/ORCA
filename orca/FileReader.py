@@ -41,11 +41,10 @@ def read_hz_and_spl(rew_str):
                 raise ValueError(f"Invalid REW data row: {raw_line!r}")
             freq = _parse_rew_float(parts[0], raw_line)
             spl = _parse_rew_float(parts[1], raw_line)
-            if not math.isfinite(freq) or not math.isfinite(spl):
+            if not math.isfinite(freq) or not math.isfinite(spl) or freq <= 0:
                 raise ValueError(f"Invalid REW data row: {raw_line!r}")
-            if freq >= 20:
-                frequencies.append(freq)
-                sp_levels.append(spl)
+            frequencies.append(freq)
+            sp_levels.append(spl)
         elif "Freq(Hz)" in line and "SPL" in line:
             start = True
             saw_header = True
@@ -53,7 +52,7 @@ def read_hz_and_spl(rew_str):
     if not saw_header:
         raise ValueError("No REW frequency/SPL header found")
     if not frequencies:
-        raise ValueError("No REW frequency/SPL data found at or above 20 Hz")
+        raise ValueError("No REW frequency/SPL data found")
 
     return frequencies, sp_levels
 
