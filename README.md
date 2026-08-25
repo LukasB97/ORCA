@@ -45,6 +45,8 @@ in the 20-20000 Hz range.
 
 Measurements are level-normalized against the shared 100-10000 Hz range by default. This avoids
 letting bass roll-off, room modes, or high-frequency directivity dominate the level reference.
+All supplied measurements must use the same logarithmic frequency grid. ORCA keeps that native
+measurement resolution throughout the calculation instead of resampling it to a fixed grid.
 
 More examples on the usage, are in the examples.py
 
@@ -92,11 +94,13 @@ Run the complete test suite from the repository root with:
 
 ## The Algorithm
 
-To compute an equalizer, 512 boost levels for log spaced frequencies are evaluated.
+To compute an equalizer, one boost level is evaluated for every frequency point in the
+original measurement grid.
 
 For each of the frequencies, the process is as follows:
 
-We take a strongly smoothed version of each measurement,
+We take a strongly smoothed version of each measurement. Smoothing widths are defined in
+octaves, so they do not change when the measurement grid has a different point density,
 and compare the level of our target curve to the current spl.
 
 We look for a dB adjustment at this frequency to minimize the

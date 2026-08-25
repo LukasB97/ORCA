@@ -1,11 +1,14 @@
 import unittest
 
+import numpy as np
+
 from orca import TargetCurves, WeightingFuns
 from orca.BoostComputation import minimize
 from orca.Curve import Curve
 from orca.EQConfig import EQConfig
 from orca.Measurement import Measurement
 from orca.RewToGraphEq import calc_eq_curve
+from orca.Smoothing import SmoothingFactor
 
 
 def _config_for_synthetic_tests():
@@ -24,7 +27,6 @@ class SyntheticCurveTests(unittest.TestCase):
             [measurement],
             TargetCurves.linear(),
             _config_for_synthetic_tests(),
-            res=3,
         )
 
         self.assertAlmostEqual(float(eq(100)), 0, delta=0.1)
@@ -38,7 +40,6 @@ class SyntheticCurveTests(unittest.TestCase):
             [measurement],
             TargetCurves.linear(),
             _config_for_synthetic_tests(),
-            res=3,
         )
 
         self.assertLess(float(eq(1000)), -1)
@@ -50,7 +51,6 @@ class SyntheticCurveTests(unittest.TestCase):
             [measurement],
             TargetCurves.linear(),
             _config_for_synthetic_tests(),
-            res=3,
         )
 
         self.assertGreater(float(eq(1000)), 1)
@@ -63,33 +63,31 @@ class SyntheticCurveTests(unittest.TestCase):
             [lower, higher],
             TargetCurves.linear(),
             _config_for_synthetic_tests(),
-            res=3,
         )
 
         self.assertAlmostEqual(float(eq(1000)), 0, delta=1)
 
-    def test_measurement_order_does_not_change_frequency_weighting(self):
-        wide = Measurement(Curve([20, 20000], [10, 10]))
-        narrow = Measurement(Curve([100, 10000], [10, 10]))
-        config = EQConfig(
-            eq_points=[100, 1000, 10000],
-            set_max_zero=False,
-            weighting_fun=lambda iteration, pos: pos,
-        )
-
-        wide_first = calc_eq_curve(
-            [wide, narrow], TargetCurves.linear(), config, res=3
-        )
-        narrow_first = calc_eq_curve(
-            [narrow, wide], TargetCurves.linear(), config, res=3
-        )
-
-        for frequency in (100, 1000, 10000):
-            self.assertAlmostEqual(
-                float(wide_first(frequency)),
-                float(narrow_first(frequency)),
-                places=6,
+    def test_octave_smoothing_is_independent_of_measurement_density(self):
+        def build_curve(points_per_octave):
+            frequencies = np.logspace(
+                np.log2(100),
+                np.log2(10000),
+                round(np.log2(10000 / 100) * points_per_octave) + 1,
+                base=2,
             )
+            levels = 10 * np.exp(-0.5 * (np.log2(frequencies / 1000) / 0.08) ** 2)
+            return Curve(frequencies, levels)
+
+        coarse = build_curve(48).smooth(SmoothingFactor.DEFAULT_SMOOTHING)
+        dense = build_curve(96).smooth(SmoothingFactor.DEFAULT_SMOOTHING)
+
+        self.assertAlmostEqual(float(coarse(1000)), float(dense(1000)), delta=0.03)
+
+    def test_smoothing_rejects_non_logarithmic_frequency_grid(self):
+        curve = Curve([100, 200, 1000], [0, 1, 0])
+
+        with self.assertRaisesRegex(ValueError, "logarithmically uniform"):
+            curve.smooth(SmoothingFactor.DEFAULT_SMOOTHING)
 
     def test_deviation_curve_uses_midband_reference_not_full_range(self):
         bass_heavy = Curve([20, 100, 1000, 10000], [20, 0, 0, 0])

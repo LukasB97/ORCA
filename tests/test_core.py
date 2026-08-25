@@ -12,7 +12,12 @@ from orca.Curve import Curve
 from orca.EQConfig import EQConfig
 from orca.FileReader import curve_from_rew_file, get_files, read_hz_and_spl
 from orca.BoostComputation import minimize
-from orca.RewToGraphEq import _build_deviation_curves, format_eq_str, get_graph_eq_str
+from orca.RewToGraphEq import (
+    _build_deviation_curves,
+    _validate_measurement_grids,
+    create_eq,
+    format_eq_str,
+)
 from orca.Utils import log_spaced_ints
 from examples import custom_eq_config_example
 
@@ -39,6 +44,12 @@ class ImportAndCurveTests(unittest.TestCase):
         self.assertAlmostEqual(float(curve(10)), 0)
         self.assertEqual(len(curve([10, 100])), 2)
         self.assertEqual(len(curve(10, 100)), 2)
+
+    def test_curve_preserves_original_frequency_grid(self):
+        frequencies = [20, 30, 100, 1000]
+        curve = Curve(frequencies, [0, 1, 2, 3])
+
+        self.assertEqual(curve.domain_frequencies, frequencies)
 
     def test_curve_rejects_invalid_input(self):
         with self.assertRaises(ValueError):
@@ -82,6 +93,14 @@ class ImportAndCurveTests(unittest.TestCase):
             left + right
         with self.assertRaisesRegex(ValueError, "overlapping"):
             Curve.build_average_curve([left, right])
+
+    def test_curve_operations_merge_natural_frequency_grids(self):
+        left = Curve([10, 20, 40, 100], [0, 0, 0, 0])
+        right = Curve([20, 30, 100], [1, 1, 1])
+
+        combined = left + right
+
+        self.assertEqual(combined.domain_frequencies, [20, 30, 40, 100])
 
     def test_average_curve_uses_decibel_power_scale(self):
         quiet = Curve([100, 1000], [0, 0])
@@ -218,18 +237,19 @@ class ConfigAndEndToEndTests(unittest.TestCase):
         self.assertEqual(minimize(0, [2, 2]), -2)
 
     def test_graph_eq_generation_from_examples(self):
-        eq_config = EQConfig(eq_res=8)
-        output = get_graph_eq_str(
+        eq_config = EQConfig()
+        eq_curve = create_eq(
             measurements_dir=str(EXAMPLE_MEASUREMENTS),
             eq_config=eq_config,
-            calculation_res=32,
         )
+        output = format_eq_str(eq_curve, eq_config)
 
+        self.assertEqual(len(eq_curve.domain_frequencies), 956)
         self.assertTrue(output.startswith("GraphicEQ: "))
         self.assertEqual(output.count(";") + 1, len(eq_config.eq_points))
 
     def test_custom_eq_config_example_runs_with_bundled_measurements(self):
-        output = custom_eq_config_example(calculation_res=16)
+        output = custom_eq_config_example()
 
         self.assertTrue(output.startswith("GraphicEQ: "))
 
@@ -274,6 +294,20 @@ class ConfigAndEndToEndTests(unittest.TestCase):
                 Curve([20, 50], [0, 1]),
                 Curve([20, 50], [1, 2]),
             ])
+
+    def test_measurements_require_same_frequency_count(self):
+        with self.assertRaisesRegex(ValueError, "frequency grids differ"):
+            _validate_measurement_grids([
+                Curve([20, 100, 1000], [0, 0, 0]),
+                Curve([20, 100], [0, 0]),
+            ])
+
+    def test_measurements_require_identical_frequency_values(self):
+        with self.assertRaisesRegex(ValueError, "second.*expected 100 Hz"):
+            _validate_measurement_grids([
+                Curve([20, 100, 1000], [0, 0, 0]),
+                Curve([20, 101, 1000], [0, 0, 0]),
+            ], file_paths=["first.txt", "second.txt"])
 
     def test_cli_rejects_missing_input(self):
         with contextlib.redirect_stderr(io.StringIO()):

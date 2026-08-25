@@ -40,6 +40,35 @@ def _build_deviation_curves(curves: List[Curve]):
     ]
 
 
+def _validate_measurement_grids(curves: List[Curve], file_paths=None):
+    curves = list(curves)
+    if not curves:
+        raise ValueError("At least one measurement is required")
+
+    if file_paths is None:
+        labels = [f"measurement {index + 1}" for index in range(len(curves))]
+    else:
+        labels = list(file_paths)
+
+    reference = curves[0].domain_frequencies
+    for index, curve in enumerate(curves[1:], start=1):
+        frequencies = curve.domain_frequencies
+        if len(frequencies) != len(reference):
+            raise ValueError(
+                "Measurement frequency grids differ: "
+                f"{labels[0]!r} has {len(reference)} points, but "
+                f"{labels[index]!r} has {len(frequencies)} points"
+            )
+        for point_index, (expected, actual) in enumerate(zip(reference, frequencies)):
+            if actual != expected:
+                raise ValueError(
+                    "Measurement frequency grids differ: "
+                    f"{labels[index]!r} has {actual:g} Hz at point {point_index + 1}, "
+                    f"expected {expected:g} Hz from {labels[0]!r}"
+                )
+    return reference
+
+
 def _validate_eq_points_in_range(eq_curve: Curve, eq_points):
     points = [float(point) for point in eq_points]
     lower_bound = eq_curve.starting_freq * (1 - EQ_POINT_RANGE_TOLERANCE)
@@ -59,22 +88,21 @@ def _validate_eq_points_in_range(eq_curve: Curve, eq_points):
     return points
 
 
-def calc_eq_curve(measurements: List[Measurement], target_curve: Curve, eq_config: EQConfig.EQConfig, res=512):
+def calc_eq_curve(measurements: List[Measurement], target_curve: Curve, eq_config: EQConfig.EQConfig):
     """
     Calculates a Graphic Equalizer for multiple measurement and a target curve
     :param eq_config: configuration for the eq generation
     :param measurements: List of deviation curves
     :param target_curve: A curve that represents the eq target
-    :return: List of db-boost values for each point in eq_points
+    :return: EQ curve on the measurements' native frequency grid
     """
     if not measurements:
         raise ValueError("At least one measurement is required")
 
-    eq_from, eq_to = _get_common_frequency_range([measurement.curve for measurement in measurements])
+    curves = [measurement.curve for measurement in measurements]
+    eq_points = _validate_measurement_grids(curves)
+    eq_from, eq_to = eq_points[0], eq_points[-1]
     eq_level = []
-    eq_points = Utils.log_spaced(eq_from,
-                                 eq_to,
-                                 res)
 
     for hz_value in eq_points:
         eq_level.append(
@@ -109,7 +137,6 @@ def create_eq(
         target_curve=None,
         draw=False,
         verbose=False,
-        calculation_res=512
 ):
     if eq_config is None:
         eq_config = EQConfig.EQConfig()
@@ -118,6 +145,7 @@ def create_eq(
 
     file_paths = get_files(dir_path=measurements_dir, file_paths=file_paths)
     raw_curves = [curve_from_rew_file(file_path) for file_path in file_paths]
+    _validate_measurement_grids(raw_curves, file_paths=file_paths)
     curves = _build_deviation_curves(raw_curves)
 
     avg = Curve.build_average_curve(curves)
@@ -130,7 +158,7 @@ def create_eq(
     target_curve = TargetCurves.adjust_bass_target(target_curve, measurements)
     if draw:
         target_curve.draw("Target Curve")
-    eq_curve = calc_eq_curve(measurements, target_curve, eq_config, res=calculation_res)
+    eq_curve = calc_eq_curve(measurements, target_curve, eq_config)
     estimated_fr = eq_curve + avg
     estimated_fr = estimated_fr.smooth(SmoothingFactor.LIGHT_SMOOTHING)
     if draw:
@@ -169,8 +197,7 @@ def get_graph_eq_str(
         eq_config=None,
         target_curve=None,
         draw=False,
-        verbose=False,
-        calculation_res=512):
+        verbose=False):
     if eq_config is None:
         eq_config = EQConfig.default()
     if target_curve is None:
@@ -183,6 +210,5 @@ def get_graph_eq_str(
         target_curve=target_curve,
         draw=draw,
         verbose=verbose,
-        calculation_res=calculation_res,
     )
     return format_eq_str(eq, config=eq_config)

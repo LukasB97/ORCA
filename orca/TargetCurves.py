@@ -1,4 +1,4 @@
-from . import Smoothing, Utils
+from . import Smoothing
 from .Curve import Curve
 
 
@@ -61,7 +61,7 @@ def adjust_bass_target(target, measurements, max_boost=5, upper_bound=100):
         m.curve.smooth(Smoothing.SmoothingFactor.LIGHT_SMOOTHING) for m in measurements
     ]
     avg = Curve.build_average_curve(curves)
-    frequencies = Utils.log_spaced(avg.starting_freq, avg.max_frequency, Curve.res)
+    frequencies = avg.domain_frequencies
 
     y = []
     for x in frequencies:
