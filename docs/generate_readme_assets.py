@@ -92,26 +92,12 @@ def main() -> None:
     figure, (response_axis, eq_axis) = pyplot.subplots(
         2,
         1,
-        figsize=(10, 6.25),
+        figsize=(10, 5.5),
         dpi=160,
         gridspec_kw={"height_ratios": (2.2, 1), "hspace": 0.32},
     )
     figure.patch.set_facecolor("white")
-    figure.suptitle(
-        "From REW measurements to an importable GraphicEQ",
-        x=0.08,
-        y=0.97,
-        horizontalalignment="left",
-        fontsize=18,
-    )
-    figure.text(
-        0.08,
-        0.915,
-        f"{len(measurement_paths)} listening positions • Wavelet layout • level-aligned comparison",
-        color="#64748b",
-        fontsize=10,
-    )
-    figure.subplots_adjust(top=0.82, bottom=0.1, left=0.085, right=0.98)
+    figure.subplots_adjust(top=0.94, bottom=0.11, left=0.085, right=0.98)
 
     response_axis.plot(
         frequencies,

@@ -6,8 +6,6 @@
 ![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-![Measured room response, ORCA target, estimated corrected response, and generated equalizer](docs/assets/orca-overview.png)
-
 ORCA takes one or more frequency-response measurements exported from
 [Room EQ Wizard (REW)](https://www.roomeqwizard.com/), calculates a correction curve, and
 outputs a `GraphicEQ` definition for software equalizers such as
@@ -17,6 +15,8 @@ outputs a `GraphicEQ` definition for software equalizers such as
 Unlike workflows built around a small set of parametric filters, ORCA optimizes the actual
 GraphicEQ control points that will be exported. The result can follow room-response problems in
 detail while becoming progressively smoother toward higher frequencies.
+
+![Measured room response, ORCA target, estimated corrected response, and generated equalizer](docs/assets/orca-overview.png)
 
 ## Why ORCA?
 
