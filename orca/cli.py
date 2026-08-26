@@ -30,6 +30,21 @@ def _build_parser() -> argparse.ArgumentParser:
         help="EQ point layout to use.",
     )
     parser.add_argument(
+        "--eq-from",
+        type=float,
+        help="Lower frequency bound for a custom EQ point grid.",
+    )
+    parser.add_argument(
+        "--eq-to",
+        type=float,
+        help="Upper frequency bound for a custom EQ point grid.",
+    )
+    parser.add_argument(
+        "--eq-res",
+        type=int,
+        help="Number of points in a custom EQ grid (default: 128).",
+    )
+    parser.add_argument(
         "--draw",
         action="store_true",
         help="Show diagnostic plots while creating the equalizer.",
@@ -52,7 +67,19 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _get_config(name: str) -> EQConfig:
+def _get_config(
+    name: str,
+    eq_from: float | None = None,
+    eq_to: float | None = None,
+    eq_res: int | None = None,
+) -> EQConfig:
+    if eq_from is not None and eq_to is not None:
+        return EQConfig.from_range(
+            eq_from=eq_from,
+            eq_to=eq_to,
+            eq_res=128 if eq_res is None else eq_res,
+        )
+
     configs: dict[str, Callable[[], EQConfig]] = {
         "default": EQConfig,
         "detail": lambda: EQConfig.from_range(eq_res=256),
@@ -68,6 +95,13 @@ def main(argv: Sequence[str] | None = None) -> None:
         parser.error("provide --measurements-dir or at least one --file")
     if (args.reference_from is None) != (args.reference_to is None):
         parser.error("provide --reference-from and --reference-to together")
+    custom_eq_requested = any(
+        value is not None for value in (args.eq_from, args.eq_to, args.eq_res)
+    )
+    if custom_eq_requested and (args.eq_from is None or args.eq_to is None):
+        parser.error("provide --eq-from and --eq-to together; --eq-res is optional")
+    if custom_eq_requested and args.config != "default":
+        parser.error("custom EQ bounds cannot be combined with --config detail or wavelet")
 
     reference_range = DEFAULT_REFERENCE_RANGE
     if args.reference_from is not None and args.reference_to is not None:
@@ -77,7 +111,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         eq_str = get_graph_eq_str(
             measurements_dir=args.measurements_dir,
             file_paths=args.files,
-            eq_config=_get_config(args.config),
+            eq_config=_get_config(
+                args.config,
+                eq_from=args.eq_from,
+                eq_to=args.eq_to,
+                eq_res=args.eq_res,
+            ),
             draw=args.draw,
             verbose=args.verbose,
             reference_range=reference_range,

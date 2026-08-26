@@ -42,12 +42,16 @@ The equivalent Python module entrypoints are also available:
 
 For a band-limited measurement, choose the frequency range used for SPL normalization explicitly:
 
+        from orca.EQConfig import EQConfig
+
+        subwoofer_config = EQConfig.from_range(eq_from=20, eq_to=80, eq_res=32)
         eq_str = get_graph_eq_str(
             measurements_dir="path/to/subwoofer/measurements",
+            eq_config=subwoofer_config,
             reference_range=(30, 80),
         )
 
-        orca-eq --measurements-dir "path/to/subwoofer/measurements" --reference-from 30 --reference-to 80
+        orca-eq --measurements-dir "path/to/subwoofer/measurements" --eq-from 20 --eq-to 80 --eq-res 32 --reference-from 30 --reference-to 80
 
 From a checkout, you can also run `python main.py --measurements-dir "example measurements"`.
 

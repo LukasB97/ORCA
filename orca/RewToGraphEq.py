@@ -60,6 +60,12 @@ def _require_reference_coverage(
             f"Measurements must fully cover the reference range {reference_from:g}-"
             f"{reference_to:g} Hz; their common range is {common_from:g}-{common_to:g} Hz"
         )
+    if not any(
+        reference_from <= frequency <= reference_to for frequency in curves[0].domain_frequencies
+    ):
+        raise ValueError(
+            f"Reference range {reference_from:g}-{reference_to:g} Hz contains no measurement points"
+        )
     return reference_from, reference_to
 
 

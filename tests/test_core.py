@@ -602,6 +602,12 @@ class ConfigAndEndToEndTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     _build_deviation_curves([curve], reference_range=reference_range)
 
+    def test_reference_range_must_contain_a_measurement_point(self):
+        curve = Curve([20, 40, 80], [0, 0, 0])
+
+        with self.assertRaisesRegex(ValueError, "contains no measurement points"):
+            _build_deviation_curves([curve], reference_range=(30, 35))
+
     def test_measurements_require_same_frequency_count(self):
         with self.assertRaisesRegex(ValueError, "frequency grids differ"):
             _validate_measurement_grids(
@@ -639,6 +645,43 @@ class ConfigAndEndToEndTests(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
                 main(["--file", "measurement.txt", "--reference-from", "30"])
+
+    def test_cli_requires_complete_custom_eq_grid_options(self):
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                main(["--file", "measurement.txt", "--eq-res", "32"])
+
+    def test_cli_generates_band_limited_eq_with_custom_grid(self):
+        content = """
+* Freq(Hz) SPL(dB) Phase(degrees)
+20 70 0
+40 70 0
+80 70 0
+""".strip()
+        stdout = io.StringIO()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            measurement = Path(temp_dir) / "subwoofer.txt"
+            measurement.write_text(content, encoding="utf-8")
+            with contextlib.redirect_stdout(stdout):
+                main(
+                    [
+                        "--file",
+                        str(measurement),
+                        "--eq-from",
+                        "20",
+                        "--eq-to",
+                        "80",
+                        "--eq-res",
+                        "2",
+                        "--reference-from",
+                        "20",
+                        "--reference-to",
+                        "80",
+                    ]
+                )
+
+        self.assertEqual(stdout.getvalue().strip(), "GraphicEQ: 20 0.0; 80 0.0")
 
     def test_cli_passes_explicit_reference_range(self):
         stdout = io.StringIO()
