@@ -18,7 +18,7 @@ from orca.BoostComputation import minimize
 from orca.cli import main
 from orca.Curve import Curve, PlottingDependencyError
 from orca.EQConfig import EQConfig
-from orca.FileReader import curve_from_rew_file, get_files, read_hz_and_spl
+from orca.FileReader import curve_from_rew_file, get_all_txt_files, get_files, read_hz_and_spl
 from orca.RewToGraphEq import (
     _build_deviation_curves,
     _estimate_error_stats,
@@ -27,6 +27,7 @@ from orca.RewToGraphEq import (
     create_eq,
     format_eq_str,
 )
+from orca.TargetCurves import _create_target_curve
 from orca.Utils import log_spaced_ints
 from orca.Wavelet import WAVELET_POINTS
 from orca.Wavelet import config as wavelet_config
@@ -68,6 +69,18 @@ class ImportAndCurveTests(unittest.TestCase):
         )
 
         self.assertEqual(result.stdout.strip(), "False")
+
+    def test_module_entrypoints_show_cli_help(self):
+        for module_name in ("orca", "orca.cli"):
+            with self.subTest(module_name=module_name):
+                result = subprocess.run(
+                    [sys.executable, "-m", module_name, "--help"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+
+                self.assertIn("Create a GraphicEQ string", result.stdout)
 
     def test_curve_draw_reports_missing_plotting_dependency(self):
         curve = Curve([100, 1000], [0, 0])
@@ -122,6 +135,10 @@ class ImportAndCurveTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "Reference frequency range"):
             curve.to_deviation_curve()
+
+    def test_non_linear_target_curve_error_is_informative(self):
+        with self.assertRaisesRegex(ValueError, "at least four points"):
+            _create_target_curve({100: 0, 1000: 0, 10000: 0}, "quadratic")
 
     def test_curve_operations_reject_non_overlapping_domains(self):
         left = Curve([10, 20], [0, 1])
@@ -232,6 +249,18 @@ class FileReaderTests(unittest.TestCase):
         self.assertEqual(len(files), 5)
         self.assertTrue(all(Path(file).suffix == ".txt" for file in files))
 
+    def test_directory_reader_accepts_txt_case_insensitively_and_files_only(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "lower.txt").touch()
+            (directory / "upper.TXT").touch()
+            (directory / "ignored.csv").touch()
+            (directory / "directory.txt").mkdir()
+
+            files = get_all_txt_files(directory)
+
+        self.assertEqual({Path(file).name for file in files}, {"lower.txt", "upper.TXT"})
+
     def test_get_files_does_not_mutate_supplied_file_list(self):
         supplied_files = [str(EXAMPLE_MEASUREMENTS / "Sep 13.txt")]
         original_files = supplied_files.copy()
@@ -333,6 +362,30 @@ class ConfigAndEndToEndTests(unittest.TestCase):
         for frequency, expected in expected_levels.items():
             self.assertAlmostEqual(levels[frequency], expected, delta=0.2)
 
+    def test_create_eq_supports_explicit_reference_range_for_band_limited_measurement(self):
+        content = """
+* Freq(Hz) SPL(dB) Phase(degrees)
+20 70 0
+40 70 0
+80 70 0
+""".strip()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            measurement = Path(temp_dir) / "subwoofer.txt"
+            measurement.write_text(content, encoding="utf-8")
+            config = EQConfig(eq_points=[20, 80])
+
+            with self.assertRaisesRegex(ValueError, "must fully cover"):
+                create_eq(file_paths=[str(measurement)], eq_config=config)
+
+            eq = create_eq(
+                file_paths=[str(measurement)],
+                eq_config=config,
+                reference_range=(20, 80),
+            )
+
+        self.assertEqual(eq.domain_frequencies, [20, 80])
+
     def test_custom_eq_points_accept_iterables_and_are_immutable(self):
         config = EQConfig(eq_points=(point for point in [100, 1000, 10000]))
 
@@ -361,6 +414,10 @@ class ConfigAndEndToEndTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "finite frequencies"):
                     EQConfig(eq_points=points)
 
+    def test_eq_config_rejects_eq_points_that_overflow_float(self):
+        with self.assertRaisesRegex(ValueError, "numeric frequencies"):
+            EQConfig(eq_points=[100, 10**400])
+
     def test_eq_config_rejects_invalid_output_options(self):
         invalid_options = (
             {"set_max_zero": 1},
@@ -385,6 +442,15 @@ class ConfigAndEndToEndTests(unittest.TestCase):
         config = EQConfig(max_boost=10**27)
 
         self.assertEqual(config.max_boost, float(10**27))
+
+    def test_max_boost_rejects_values_that_overflow_float(self):
+        with self.assertRaisesRegex(ValueError, "finite number"):
+            EQConfig(max_boost=10**400)
+
+    def test_max_boost_accepts_large_finite_float(self):
+        config = EQConfig(max_boost=1e308)
+
+        self.assertEqual(config.max_boost, 1e308)
 
     def test_max_boost_accepts_real_number_implementations(self):
         config = EQConfig(max_boost=Fraction(1, 10))
@@ -516,6 +582,32 @@ class ConfigAndEndToEndTests(unittest.TestCase):
                 ]
             )
 
+    def test_measurements_accept_explicit_fully_covered_reference_range(self):
+        deviations = _build_deviation_curves(
+            [
+                Curve([20, 40, 80], [1, 2, 3]),
+                Curve([20, 40, 80], [2, 3, 4]),
+            ],
+            reference_range=(20, 80),
+        )
+
+        self.assertEqual(len(deviations), 2)
+        self.assertAlmostEqual(sum(deviations[0].domain_values), 0)
+
+    def test_reference_range_must_be_valid(self):
+        curve = Curve([20, 100, 1000], [0, 0, 0])
+
+        for reference_range in ((100, 100), (0, 100), (100, float("inf"))):
+            with self.subTest(reference_range=reference_range):
+                with self.assertRaises(ValueError):
+                    _build_deviation_curves([curve], reference_range=reference_range)
+
+    def test_reference_range_must_contain_a_measurement_point(self):
+        curve = Curve([20, 40, 80], [0, 0, 0])
+
+        with self.assertRaisesRegex(ValueError, "contains no measurement points"):
+            _build_deviation_curves([curve], reference_range=(30, 35))
+
     def test_measurements_require_same_frequency_count(self):
         with self.assertRaisesRegex(ValueError, "frequency grids differ"):
             _validate_measurement_grids(
@@ -535,10 +627,80 @@ class ConfigAndEndToEndTests(unittest.TestCase):
                 file_paths=["first.txt", "second.txt"],
             )
 
+    def test_measurements_reject_even_minimal_grid_differences(self):
+        with self.assertRaisesRegex(ValueError, "frequency grids differ"):
+            _validate_measurement_grids(
+                [
+                    Curve([20, 100, 1000], [0, 0, 0]),
+                    Curve([20, math.nextafter(100, math.inf), 1000], [0, 0, 0]),
+                ]
+            )
+
     def test_cli_rejects_missing_input(self):
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
                 main([])
+
+    def test_cli_requires_both_reference_bounds(self):
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                main(["--file", "measurement.txt", "--reference-from", "30"])
+
+    def test_cli_requires_complete_custom_eq_grid_options(self):
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                main(["--file", "measurement.txt", "--eq-res", "32"])
+
+    def test_cli_generates_band_limited_eq_with_custom_grid(self):
+        content = """
+* Freq(Hz) SPL(dB) Phase(degrees)
+20 70 0
+40 70 0
+80 70 0
+""".strip()
+        stdout = io.StringIO()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            measurement = Path(temp_dir) / "subwoofer.txt"
+            measurement.write_text(content, encoding="utf-8")
+            with contextlib.redirect_stdout(stdout):
+                main(
+                    [
+                        "--file",
+                        str(measurement),
+                        "--eq-from",
+                        "20",
+                        "--eq-to",
+                        "80",
+                        "--eq-res",
+                        "2",
+                        "--reference-from",
+                        "20",
+                        "--reference-to",
+                        "80",
+                    ]
+                )
+
+        self.assertEqual(stdout.getvalue().strip(), "GraphicEQ: 20 0.0; 80 0.0")
+
+    def test_cli_passes_explicit_reference_range(self):
+        stdout = io.StringIO()
+
+        with mock.patch("orca.cli.get_graph_eq_str", return_value="GraphicEQ: 20 0.0") as get_eq:
+            with contextlib.redirect_stdout(stdout):
+                main(
+                    [
+                        "--file",
+                        "measurement.txt",
+                        "--reference-from",
+                        "30",
+                        "--reference-to",
+                        "80",
+                    ]
+                )
+
+        self.assertEqual(get_eq.call_args.kwargs["reference_range"], (30.0, 80.0))
+        self.assertEqual(stdout.getvalue().strip(), "GraphicEQ: 20 0.0")
 
     def test_cli_reports_expected_input_errors_without_traceback(self):
         stdout = io.StringIO()
