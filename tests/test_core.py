@@ -1,4 +1,5 @@
 import contextlib
+import importlib
 import io
 import math
 import subprocess
@@ -9,12 +10,13 @@ from dataclasses import FrozenInstanceError, is_dataclass
 from decimal import localcontext
 from fractions import Fraction
 from pathlib import Path
+from unittest import mock
 
 import orca
 from examples import custom_eq_config_example
 from orca.BoostComputation import minimize
 from orca.cli import main
-from orca.Curve import Curve
+from orca.Curve import Curve, PlottingDependencyError
 from orca.EQConfig import EQConfig
 from orca.FileReader import curve_from_rew_file, get_files, read_hz_and_spl
 from orca.RewToGraphEq import (
@@ -36,8 +38,6 @@ EXAMPLE_MEASUREMENTS = ROOT / "example measurements"
 class ImportAndCurveTests(unittest.TestCase):
     def test_package_exposes_stable_public_api(self):
         expected_api = {
-            "Curve",
-            "EQConfig",
             "TargetCurves",
             "build_export_curve",
             "create_eq",
@@ -49,6 +49,15 @@ class ImportAndCurveTests(unittest.TestCase):
         self.assertEqual(set(orca.__all__), expected_api)
         self.assertTrue(all(hasattr(orca, name) for name in expected_api))
 
+    def test_public_api_does_not_shadow_legacy_submodules(self):
+        curve_module = importlib.import_module("orca.Curve")
+        config_module = importlib.import_module("orca.EQConfig")
+
+        self.assertIs(orca.Curve, curve_module)
+        self.assertIs(orca.EQConfig, config_module)
+        self.assertIs(curve_module.Curve, Curve)
+        self.assertIs(config_module.EQConfig, EQConfig)
+
     def test_curve_module_does_not_import_matplotlib(self):
         script = "import sys; import orca.RewToGraphEq; print('matplotlib' in sys.modules)"
         result = subprocess.run(
@@ -59,6 +68,13 @@ class ImportAndCurveTests(unittest.TestCase):
         )
 
         self.assertEqual(result.stdout.strip(), "False")
+
+    def test_curve_draw_reports_missing_plotting_dependency(self):
+        curve = Curve([100, 1000], [0, 0])
+
+        with mock.patch.dict(sys.modules, {"matplotlib": None}):
+            with self.assertRaisesRegex(PlottingDependencyError, "requires matplotlib"):
+                curve.draw()
 
     def test_curve_accepts_scalar_and_iterables(self):
         curve = Curve([10, 100], [0, 10])
@@ -535,6 +551,23 @@ class ConfigAndEndToEndTests(unittest.TestCase):
         self.assertEqual(exit_context.exception.code, 2)
         self.assertEqual(stdout.getvalue(), "")
         self.assertIn("Measurement directory does not exist", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
+    def test_cli_reports_missing_plotting_dependency_without_traceback(self):
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        plotting_error = PlottingDependencyError(
+            "Plotting requires matplotlib. Install it with `pip install .[plot]`."
+        )
+
+        with mock.patch("orca.cli.get_graph_eq_str", side_effect=plotting_error):
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as exit_context:
+                    main(["--file", "measurement.txt", "--draw"])
+
+        self.assertEqual(exit_context.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("requires matplotlib", stderr.getvalue())
         self.assertNotIn("Traceback", stderr.getvalue())
 
     def test_cli_verbose_keeps_stdout_machine_readable(self):

@@ -9,6 +9,10 @@ from scipy.interpolate import interp1d  # type: ignore[import-untyped]
 from . import Smoothing, Utils
 
 
+class PlottingDependencyError(RuntimeError):
+    """Raised when optional plotting support is requested but unavailable."""
+
+
 class Curve:
     log = 2  # Base of the used logarithm
 
@@ -130,7 +134,7 @@ class Curve:
         try:
             from matplotlib import pyplot  # type: ignore[import-not-found]
         except ImportError as exc:
-            raise RuntimeError(
+            raise PlottingDependencyError(
                 "Plotting requires matplotlib. Install it with `pip install .[plot]`."
             ) from exc
 

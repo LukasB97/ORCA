@@ -4,6 +4,7 @@ import argparse
 from collections.abc import Callable, Sequence
 
 from . import Wavelet
+from .Curve import PlottingDependencyError
 from .EQConfig import EQConfig
 from .RewToGraphEq import get_graph_eq_str
 
@@ -64,6 +65,6 @@ def main(argv: Sequence[str] | None = None) -> None:
             draw=args.draw,
             verbose=args.verbose,
         )
-    except (OSError, ValueError) as exc:
+    except (OSError, PlottingDependencyError, ValueError) as exc:
         parser.exit(2, f"{parser.prog}: error: {exc}\n")
     print(eq_str)

@@ -80,7 +80,7 @@ Just pass your own EQConfig to get_graph_eq_str or create_eq
 
 EQ-Config
 
-        from orca import EQConfig
+        from orca.EQConfig import EQConfig
 
         EQConfig.from_range(eq_from=20, eq_to=20000, eq_res=128): Creates a config
         with eq_res log-spaced integer points between the supplied frequency bounds.
