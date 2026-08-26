@@ -14,6 +14,7 @@ from unittest import mock
 
 import orca
 from examples import custom_eq_config_example
+from orca import TargetCurves
 from orca.BoostComputation import minimize
 from orca.cli import main
 from orca.Curve import Curve, PlottingDependencyError
@@ -289,6 +290,97 @@ class FileReaderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             with self.assertRaises(ValueError):
                 get_files(dir_path=temp_dir)
+
+
+class TargetCurveTests(unittest.TestCase):
+    def test_flat_is_the_named_alias_for_the_legacy_linear_target(self):
+        frequencies = [20, 1000, 20000]
+
+        self.assertEqual(TargetCurves.flat()(frequencies), TargetCurves.linear()(frequencies))
+
+    def test_house_curve_has_smooth_bass_and_treble_transitions(self):
+        curve = TargetCurves.house_curve()
+
+        self.assertAlmostEqual(curve(20), 6.0)
+        self.assertAlmostEqual(curve(80), 6.0)
+        self.assertAlmostEqual(curve(math.sqrt(80 * 200)), 3.0, places=3)
+        self.assertAlmostEqual(curve(200), 0.0)
+        self.assertAlmostEqual(curve(1000), 0.0)
+        self.assertAlmostEqual(curve(2000), 0.0)
+        self.assertAlmostEqual(curve(math.sqrt(2000 * 20000)), -1.0, places=3)
+        self.assertAlmostEqual(curve(20000), -2.0)
+
+        epsilon_octaves = 0.0001
+        for frequency in (80, 200, 2000, 20000):
+            left_slope = (curve(frequency) - curve(frequency * 2**-epsilon_octaves)) / (
+                epsilon_octaves
+            )
+            right_slope = (curve(frequency * 2**epsilon_octaves) - curve(frequency)) / (
+                epsilon_octaves
+            )
+            with self.subTest(frequency=frequency):
+                self.assertAlmostEqual(left_slope, right_slope, delta=0.01)
+
+    def test_house_curve_validates_levels_and_transition_ranges(self):
+        invalid_options = (
+            {"bass_gain_db": float("nan")},
+            {"bass_start_hz": 0},
+            {"bass_start_hz": 100, "bass_end_hz": 100},
+            {"treble_gain_db": float("inf")},
+            {"treble_start_hz": 5000, "treble_end_hz": 2000},
+        )
+
+        for options in invalid_options:
+            with self.subTest(options=options):
+                with self.assertRaises(ValueError):
+                    TargetCurves.house_curve(**options)
+
+    def test_harman_room_curve_matches_documented_shelf_levels(self):
+        curve = TargetCurves.harman_room_2013()
+
+        self.assertAlmostEqual(curve(20), 6.6)
+        self.assertAlmostEqual(curve(105), 3.3, places=3)
+        self.assertAlmostEqual(curve(1000), 0.0, places=3)
+        self.assertAlmostEqual(curve(2500), -1.2, places=3)
+        self.assertAlmostEqual(curve(10000), -2.4)
+
+    def test_rew_house_curve_loader_accepts_comments_and_common_separators(self):
+        content = """
+House curve generated for ORCA
+20, 6.0
+80\t0.0
+20000 -2.0 trailing columns are ignored
+""".strip()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "house-curve.txt"
+            path.write_text(content, encoding="utf-8")
+            curve = TargetCurves.from_rew_house_curve(path)
+
+        self.assertEqual(curve.domain_frequencies, [20.0, 80.0, 20000.0])
+        self.assertEqual(curve.domain_values, [6.0, 0.0, -2.0])
+        self.assertAlmostEqual(curve(10), 6.0)
+        self.assertAlmostEqual(curve(40), 3.0)
+        self.assertAlmostEqual(curve(25000), -2.0)
+
+    def test_rew_house_curve_loader_rejects_invalid_files(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            invalid_row = directory / "invalid-row.txt"
+            invalid_row.write_text("20 nope\n80 0", encoding="utf-8")
+            too_short = directory / "too-short.txt"
+            too_short.write_text("20 6", encoding="utf-8")
+            duplicate = directory / "duplicate.txt"
+            duplicate.write_text("20 6\n20 0", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "line 1"):
+                TargetCurves.from_rew_house_curve(invalid_row)
+            with self.assertRaisesRegex(ValueError, "at least two"):
+                TargetCurves.from_rew_house_curve(too_short)
+            with self.assertRaisesRegex(ValueError, "strictly increasing"):
+                TargetCurves.from_rew_house_curve(duplicate)
+            with self.assertRaisesRegex(ValueError, "does not exist"):
+                TargetCurves.from_rew_house_curve(directory / "missing.txt")
 
 
 class ConfigAndEndToEndTests(unittest.TestCase):
@@ -701,6 +793,46 @@ class ConfigAndEndToEndTests(unittest.TestCase):
 
         self.assertEqual(get_eq.call_args.kwargs["reference_range"], (30.0, 80.0))
         self.assertEqual(stdout.getvalue().strip(), "GraphicEQ: 20 0.0")
+
+    def test_cli_passes_selected_target_preset(self):
+        stdout = io.StringIO()
+
+        with mock.patch("orca.cli.get_graph_eq_str", return_value="GraphicEQ: 20 0.0") as get_eq:
+            with contextlib.redirect_stdout(stdout):
+                main(["--file", "measurement.txt", "--target", "harman-room-2013"])
+
+        target = get_eq.call_args.kwargs["target_curve"]
+        self.assertAlmostEqual(target(20), 6.6)
+        self.assertAlmostEqual(target(10000), -2.4)
+
+    def test_cli_loads_rew_target_file(self):
+        stdout = io.StringIO()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_file = Path(temp_dir) / "target.txt"
+            target_file.write_text("20 6\n80 0", encoding="utf-8")
+            with mock.patch(
+                "orca.cli.get_graph_eq_str", return_value="GraphicEQ: 20 0.0"
+            ) as get_eq:
+                with contextlib.redirect_stdout(stdout):
+                    main(["--file", "measurement.txt", "--target-file", str(target_file)])
+
+        target = get_eq.call_args.kwargs["target_curve"]
+        self.assertEqual(target.domain_values, [6.0, 0.0])
+
+    def test_cli_rejects_target_file_with_non_flat_preset(self):
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                main(
+                    [
+                        "--file",
+                        "measurement.txt",
+                        "--target",
+                        "house",
+                        "--target-file",
+                        "target.txt",
+                    ]
+                )
 
     def test_cli_reports_expected_input_errors_without_traceback(self):
         stdout = io.StringIO()

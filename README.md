@@ -124,16 +124,62 @@ graphic_eq = get_graph_eq_str(
 
 ### Choose a target curve
 
-The default target is flat. Built-in alternatives include downward-sloping targets, a downward
-slope with a flatter upper-mid section, and a V-shaped target:
+The default target is flat. The CLI also includes a general-purpose house curve and a smooth
+approximation of the mean preferred in-room loudspeaker response reported by Harman researchers in
+[AES Convention Paper 8994](https://aes.org/publications/elibrary-page/?id=17042):
+
+```console
+orca-eq --measurements-dir "path/to/rew-exports" --target house > HouseEQ.txt
+orca-eq --measurements-dir "path/to/rew-exports" --target harman-room-2013 > HarmanEQ.txt
+```
+
+| Preset | Tonal balance |
+| --- | --- |
+| `flat` | 0 dB across the complete range |
+| `house` | +6 dB bass shelf, neutral midrange, and a gentle −2 dB treble shelf |
+| `harman-room-2013` | Smooth approximation with +6.6 dB bass and −2.4 dB treble shelves centered around 105 Hz and 2.5 kHz |
+
+`harman-room-2013` is a loudspeaker target for in-room measurements. It is not one of Harman's
+headphone targets, which require measurements made with an ear simulator.
+
+The house curve can be customized through the Python API:
 
 ```python
 from orca import TargetCurves, get_graph_eq_str
 
+target = TargetCurves.house_curve(
+    bass_gain_db=4.0,
+    bass_start_hz=80,
+    bass_end_hz=200,
+    treble_gain_db=-1.5,
+    treble_start_hz=2_000,
+    treble_end_hz=20_000,
+)
 graphic_eq = get_graph_eq_str(
     measurements_dir="path/to/rew-exports",
-    target_curve=TargetCurves.downwards_slope(factor=0.5),
+    target_curve=target,
 )
+```
+
+Both shelves use smooth transitions on a logarithmic frequency axis. The older downward-sloping,
+upper-mid, and V-shaped target helpers remain available.
+
+ORCA can also read REW-compatible house-curve files containing frequency/dB pairs:
+
+```text
+20 6.0
+80 0.0
+20000 -2.0
+```
+
+Use the file from the CLI or Python:
+
+```console
+orca-eq --measurements-dir "path/to/rew-exports" --target-file house-curve.txt > CustomEQ.txt
+```
+
+```python
+target = TargetCurves.from_rew_house_curve("house-curve.txt")
 ```
 
 A target is a regular `Curve`, so applications can also construct their own target shape.
@@ -198,6 +244,8 @@ orca-eq --measurements-dir "path/to/subwoofer-measurements" \
 | `--measurements-dir DIR` | Read every `.txt` measurement in a directory |
 | `--file FILE` | Read one measurement; repeat the option for multiple files |
 | `--config default\|detail\|wavelet` | Select the 128-point, 256-point, or Wavelet layout |
+| `--target flat\|house\|harman-room-2013` | Select a built-in in-room target curve |
+| `--target-file FILE` | Load a REW-compatible house-curve file instead of a preset |
 | `--eq-from`, `--eq-to`, `--eq-res` | Build a custom logarithmic control-point grid |
 | `--reference-from`, `--reference-to` | Change the SPL normalization range |
 | `--verbose` | Print before/after error estimates to standard error |

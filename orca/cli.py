@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable, Sequence
 
-from . import Wavelet
-from .Curve import PlottingDependencyError
+from . import TargetCurves, Wavelet
+from .Curve import Curve, PlottingDependencyError
 from .EQConfig import EQConfig
 from .RewToGraphEq import DEFAULT_REFERENCE_RANGE, get_graph_eq_str
 
@@ -28,6 +28,16 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=("default", "detail", "wavelet"),
         default="default",
         help="EQ point layout to use.",
+    )
+    parser.add_argument(
+        "--target",
+        choices=("flat", "house", "harman-room-2013"),
+        default="flat",
+        help="Target-curve preset to use (default: flat).",
+    )
+    parser.add_argument(
+        "--target-file",
+        help="REW-compatible house-curve file to use instead of a preset.",
     )
     parser.add_argument(
         "--eq-from",
@@ -88,6 +98,17 @@ def _get_config(
     return configs[name]()
 
 
+def _get_target_curve(name: str, target_file: str | None = None) -> Curve:
+    if target_file is not None:
+        return TargetCurves.from_rew_house_curve(target_file)
+    targets: dict[str, Callable[[], Curve]] = {
+        "flat": TargetCurves.flat,
+        "house": TargetCurves.house_curve,
+        "harman-room-2013": TargetCurves.harman_room_2013,
+    }
+    return targets[name]()
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -102,6 +123,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         parser.error("provide --eq-from and --eq-to together; --eq-res is optional")
     if custom_eq_requested and args.config != "default":
         parser.error("custom EQ bounds cannot be combined with --config detail or wavelet")
+    if args.target_file is not None and args.target != "flat":
+        parser.error("--target-file cannot be combined with a non-flat --target preset")
 
     reference_range = DEFAULT_REFERENCE_RANGE
     if args.reference_from is not None and args.reference_to is not None:
@@ -117,6 +140,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 eq_to=args.eq_to,
                 eq_res=args.eq_res,
             ),
+            target_curve=_get_target_curve(args.target, args.target_file),
             draw=args.draw,
             verbose=args.verbose,
             reference_range=reference_range,

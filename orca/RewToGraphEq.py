@@ -321,7 +321,7 @@ def create_eq(
     if eq_config is None:
         eq_config = EQConfig()
     if target_curve is None:
-        target_curve = TargetCurves.linear()
+        target_curve = TargetCurves.flat()
 
     file_paths = get_files(dir_path=measurements_dir, file_paths=file_paths)
     raw_curves = [curve_from_rew_file(file_path) for file_path in file_paths]
@@ -405,7 +405,7 @@ def get_graph_eq_str(
     if eq_config is None:
         eq_config = EQConfig()
     if target_curve is None:
-        target_curve = TargetCurves.linear()
+        target_curve = TargetCurves.flat()
 
     eq = create_eq(
         measurements_dir=measurements_dir,
