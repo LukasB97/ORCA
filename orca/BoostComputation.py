@@ -19,6 +19,7 @@ def _create_fun_to_minimize(
         for level in spl:
             errs += _err(target, level, boost)
         return (1 / len(spl)) * errs
+
     return fun
 
 
@@ -40,4 +41,3 @@ def minimize(target: float, spl: Collection[float]) -> float:
     if not result.success:
         raise RuntimeError(f"Boost optimization failed: {result.message}")
     return float(result.x)
-

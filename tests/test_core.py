@@ -1,4 +1,5 @@
 import contextlib
+import importlib
 import io
 import math
 import subprocess
@@ -9,12 +10,15 @@ from dataclasses import FrozenInstanceError, is_dataclass
 from decimal import localcontext
 from fractions import Fraction
 from pathlib import Path
+from unittest import mock
 
+import orca
+from examples import custom_eq_config_example
+from orca.BoostComputation import minimize
 from orca.cli import main
-from orca.Curve import Curve
+from orca.Curve import Curve, PlottingDependencyError
 from orca.EQConfig import EQConfig
 from orca.FileReader import curve_from_rew_file, get_files, read_hz_and_spl
-from orca.BoostComputation import minimize
 from orca.RewToGraphEq import (
     _build_deviation_curves,
     _estimate_error_stats,
@@ -24,15 +28,36 @@ from orca.RewToGraphEq import (
     format_eq_str,
 )
 from orca.Utils import log_spaced_ints
-from orca.Wavelet import WAVELET_POINTS, config as wavelet_config
-from examples import custom_eq_config_example
-
+from orca.Wavelet import WAVELET_POINTS
+from orca.Wavelet import config as wavelet_config
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_MEASUREMENTS = ROOT / "example measurements"
 
 
 class ImportAndCurveTests(unittest.TestCase):
+    def test_package_exposes_stable_public_api(self):
+        expected_api = {
+            "TargetCurves",
+            "build_export_curve",
+            "create_eq",
+            "format_eq_str",
+            "get_graph_eq_str",
+            "wavelet_config",
+        }
+
+        self.assertEqual(set(orca.__all__), expected_api)
+        self.assertTrue(all(hasattr(orca, name) for name in expected_api))
+
+    def test_public_api_does_not_shadow_legacy_submodules(self):
+        curve_module = importlib.import_module("orca.Curve")
+        config_module = importlib.import_module("orca.EQConfig")
+
+        self.assertIs(orca.Curve, curve_module)
+        self.assertIs(orca.EQConfig, config_module)
+        self.assertIs(curve_module.Curve, Curve)
+        self.assertIs(config_module.EQConfig, EQConfig)
+
     def test_curve_module_does_not_import_matplotlib(self):
         script = "import sys; import orca.RewToGraphEq; print('matplotlib' in sys.modules)"
         result = subprocess.run(
@@ -43,6 +68,13 @@ class ImportAndCurveTests(unittest.TestCase):
         )
 
         self.assertEqual(result.stdout.strip(), "False")
+
+    def test_curve_draw_reports_missing_plotting_dependency(self):
+        curve = Curve([100, 1000], [0, 0])
+
+        with mock.patch.dict(sys.modules, {"matplotlib": None}):
+            with self.assertRaisesRegex(PlottingDependencyError, "requires matplotlib"):
+                curve.draw()
 
     def test_curve_accepts_scalar_and_iterables(self):
         curve = Curve([10, 100], [0, 10])
@@ -288,8 +320,7 @@ class ConfigAndEndToEndTests(unittest.TestCase):
         levels = {
             float(frequency): float(level)
             for frequency, level in (
-                point.split()
-                for point in output.removeprefix("GraphicEQ: ").split("; ")
+                point.split() for point in output.removeprefix("GraphicEQ: ").split("; ")
             )
         }
         expected_levels = {
@@ -351,9 +382,9 @@ class ConfigAndEndToEndTests(unittest.TestCase):
         self.assertEqual(config.max_boost, 10.0)
 
     def test_max_boost_accepts_large_integers(self):
-        config = EQConfig(max_boost=10 ** 27)
+        config = EQConfig(max_boost=10**27)
 
-        self.assertEqual(config.max_boost, float(10 ** 27))
+        self.assertEqual(config.max_boost, float(10**27))
 
     def test_max_boost_accepts_real_number_implementations(self):
         config = EQConfig(max_boost=Fraction(1, 10))
@@ -410,6 +441,32 @@ class ConfigAndEndToEndTests(unittest.TestCase):
 
         self.assertEqual(format_eq_str(curve, config), "GraphicEQ: 100 0.1; 1000 0.1")
 
+    def test_format_eq_without_config_preserves_existing_points_and_values(self):
+        curve = Curve([100, 1000, 10000], [11, 20, -1])
+
+        exported = build_export_curve(curve)
+
+        self.assertEqual(exported.domain_frequencies, [100, 1000, 10000])
+        self.assertEqual(exported.domain_values, [11, 20, -1])
+        self.assertEqual(
+            format_eq_str(curve),
+            "GraphicEQ: 100 11.0; 1000 20.0; 10000 -1.0",
+        )
+
+    def test_format_created_custom_eq_without_config_keeps_custom_grid(self):
+        config = EQConfig(eq_points=[20, 1000, 20000])
+        curve = create_eq(
+            measurements_dir=str(EXAMPLE_MEASUREMENTS),
+            eq_config=config,
+        )
+
+        output = format_eq_str(curve)
+        frequencies = [
+            float(point.split()[0]) for point in output.removeprefix("GraphicEQ: ").split("; ")
+        ]
+
+        self.assertEqual(frequencies, list(config.eq_points))
+
     def test_export_curve_is_the_curve_serialized_by_formatter(self):
         curve = Curve([100, 200, 1000], [0, 20, 0])
         config = EQConfig(
@@ -452,40 +509,79 @@ class ConfigAndEndToEndTests(unittest.TestCase):
 
     def test_measurements_need_reference_range_overlap(self):
         with self.assertRaisesRegex(ValueError, "reference range"):
-            _build_deviation_curves([
-                Curve([20, 50], [0, 1]),
-                Curve([20, 50], [1, 2]),
-            ])
+            _build_deviation_curves(
+                [
+                    Curve([20, 50], [0, 1]),
+                    Curve([20, 50], [1, 2]),
+                ]
+            )
 
     def test_measurements_require_same_frequency_count(self):
         with self.assertRaisesRegex(ValueError, "frequency grids differ"):
-            _validate_measurement_grids([
-                Curve([20, 100, 1000], [0, 0, 0]),
-                Curve([20, 100], [0, 0]),
-            ])
+            _validate_measurement_grids(
+                [
+                    Curve([20, 100, 1000], [0, 0, 0]),
+                    Curve([20, 100], [0, 0]),
+                ]
+            )
 
     def test_measurements_require_identical_frequency_values(self):
         with self.assertRaisesRegex(ValueError, "second.*expected 100 Hz"):
-            _validate_measurement_grids([
-                Curve([20, 100, 1000], [0, 0, 0]),
-                Curve([20, 101, 1000], [0, 0, 0]),
-            ], file_paths=["first.txt", "second.txt"])
+            _validate_measurement_grids(
+                [
+                    Curve([20, 100, 1000], [0, 0, 0]),
+                    Curve([20, 101, 1000], [0, 0, 0]),
+                ],
+                file_paths=["first.txt", "second.txt"],
+            )
 
     def test_cli_rejects_missing_input(self):
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
                 main([])
 
+    def test_cli_reports_expected_input_errors_without_traceback(self):
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as exit_context:
+                main(["--measurements-dir", str(ROOT / "missing-measurements")])
+
+        self.assertEqual(exit_context.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("Measurement directory does not exist", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
+    def test_cli_reports_missing_plotting_dependency_without_traceback(self):
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        plotting_error = PlottingDependencyError(
+            "Plotting requires matplotlib. Install it with `pip install .[plot]`."
+        )
+
+        with mock.patch("orca.cli.get_graph_eq_str", side_effect=plotting_error):
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as exit_context:
+                    main(["--file", "measurement.txt", "--draw"])
+
+        self.assertEqual(exit_context.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("requires matplotlib", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
     def test_cli_verbose_keeps_stdout_machine_readable(self):
         stdout = io.StringIO()
         stderr = io.StringIO()
 
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            main([
-                "--measurements-dir",
-                str(EXAMPLE_MEASUREMENTS),
-                "--verbose",
-            ])
+            main(
+                [
+                    "--measurements-dir",
+                    str(EXAMPLE_MEASUREMENTS),
+                    "--verbose",
+                ]
+            )
 
         self.assertTrue(stdout.getvalue().startswith("GraphicEQ: "))
         self.assertEqual(len(stdout.getvalue().strip().splitlines()), 1)

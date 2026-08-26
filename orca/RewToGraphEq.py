@@ -45,8 +45,7 @@ def _build_deviation_curves(curves: Sequence[Curve]) -> list[Curve]:
         )
 
     return [
-        curve.to_deviation_curve(from_freq=reference_from, to_freq=reference_to)
-        for curve in curves
+        curve.to_deviation_curve(from_freq=reference_from, to_freq=reference_to) for curve in curves
     ]
 
 
@@ -89,12 +88,9 @@ def _validate_eq_points_in_range(
     points = [float(point) for point in eq_points]
     lower_bound = eq_curve.starting_freq * (1 - EQ_POINT_RANGE_TOLERANCE)
     upper_bound = eq_curve.max_frequency * (1 + EQ_POINT_RANGE_TOLERANCE)
-    out_of_range = [
-        point for point in points
-        if point < lower_bound or point > upper_bound
-    ]
+    out_of_range = [point for point in points if point < lower_bound or point > upper_bound]
     if out_of_range:
-        shown = ", ".join("%.1f" % point for point in out_of_range[:5])
+        shown = ", ".join(f"{point:.1f}" for point in out_of_range[:5])
         if len(out_of_range) > 5:
             shown += ", ..."
         raise ValueError(
@@ -142,10 +138,7 @@ def _apply_output_constraints(levels: ArrayLike, config: EQConfig) -> FloatArray
 
 def _reference_mask(frequencies: ArrayLike) -> BoolArray:
     frequency_array = np.asarray(frequencies, dtype=float)
-    mask = (
-        (frequency_array >= REFERENCE_FROM)
-        & (frequency_array <= REFERENCE_TO)
-    )
+    mask = (frequency_array >= REFERENCE_FROM) & (frequency_array <= REFERENCE_TO)
     if not np.any(mask):
         mask = np.ones(len(frequency_array), dtype=bool)
     return mask
@@ -179,19 +172,18 @@ def calc_eq_curve(
         evaluation_points = sorted(set(measurement_points) | set(eq_points))
         interpolation = _build_interpolation_matrix(eq_points, evaluation_points)
     target_levels = np.asarray(target_curve(evaluation_points), dtype=float)
-    normalized_positions = (
-        (np.log(evaluation_points) - math.log(evaluation_points[0]))
-        / (math.log(evaluation_points[-1]) - math.log(evaluation_points[0]))
+    normalized_positions = (np.log(evaluation_points) - math.log(evaluation_points[0])) / (
+        math.log(evaluation_points[-1]) - math.log(evaluation_points[0])
     )
     point_levels: FloatArray = np.zeros(len(eq_points), dtype=float)
     reference_mask = _reference_mask(evaluation_points)
 
     for iteration, smoothing_factor in enumerate(SmoothingFactor):
         current_boost = interpolation @ point_levels
-        measurement_levels = np.asarray([
-            measurement.eval(evaluation_points, smoothing_factor)
-            for measurement in measurements
-        ], dtype=float)
+        measurement_levels = np.asarray(
+            [measurement.eval(evaluation_points, smoothing_factor) for measurement in measurements],
+            dtype=float,
+        )
         iteration_targets = target_levels
         if eq_config.set_max_zero:
             target_offset = np.mean(
@@ -225,21 +217,23 @@ def calc_eq_curve(
 
 
 def _estimate_error_stats(
-        target: Curve,
-        estimated_response: Curve,
-        label: str,
-        verbose: bool = False,
-        align_level: bool = False,
+    target: Curve,
+    estimated_response: Curve,
+    label: str,
+    verbose: bool = False,
+    align_level: bool = False,
 ) -> tuple[float, float]:
     response_offset = 0.0
     if align_level:
         frequencies = estimated_response.domain_frequencies
         mask = _reference_mask(frequencies)
         reference_points = np.asarray(frequencies)[mask]
-        response_offset = float(np.mean(
-            np.asarray(target(reference_points))
-            - np.asarray(estimated_response(reference_points))
-        ))
+        response_offset = float(
+            np.mean(
+                np.asarray(target(reference_points))
+                - np.asarray(estimated_response(reference_points))
+            )
+        )
 
     errs: list[float] = []
     for point in estimated_response.domain_frequencies:
@@ -258,9 +252,14 @@ def _estimate_error_stats(
 
 
 def build_export_curve(eq_curve: Curve, config: EQConfig | None = None) -> Curve:
-    """Return the exact point curve that is serialized as GraphicEQ."""
+    """Return the exact point curve that is serialized as GraphicEQ.
+
+    Without a config, preserve the curve's existing control points and values.
+    Supplying a config explicitly resamples the curve to the configured points
+    and applies the configured output constraints.
+    """
     if config is None:
-        config = EQConfig()
+        return Curve(eq_curve.domain_frequencies, eq_curve.domain_values)
 
     eq_points = _validate_eq_points_in_range(eq_curve, config.eq_points)
     raw_adjustments = [float(level) for level in eq_curve(eq_points)]
@@ -270,12 +269,12 @@ def build_export_curve(eq_curve: Curve, config: EQConfig | None = None) -> Curve
 
 
 def create_eq(
-        measurements_dir: str | None = None,
-        file_paths: Sequence[str] | None = None,
-        eq_config: EQConfig | None = None,
-        target_curve: Curve | None = None,
-        draw: bool = False,
-        verbose: bool = False,
+    measurements_dir: str | None = None,
+    file_paths: Sequence[str] | None = None,
+    eq_config: EQConfig | None = None,
+    target_curve: Curve | None = None,
+    draw: bool = False,
+    verbose: bool = False,
 ) -> Curve:
     if eq_config is None:
         eq_config = EQConfig()
@@ -289,7 +288,9 @@ def create_eq(
 
     avg = Curve.build_average_curve(curves)
     if draw:
-        avg.smooth(SmoothingFactor.LIGHT_SMOOTHING).draw("Averaged Frequency Response of all Measurements")
+        avg.smooth(SmoothingFactor.LIGHT_SMOOTHING).draw(
+            "Averaged Frequency Response of all Measurements"
+        )
     _estimate_error_stats(
         target_curve,
         avg,
@@ -327,9 +328,14 @@ def create_eq(
 
 
 def format_eq_str(eq_curve: Curve, config: EQConfig | None = None) -> str:
+    """Serialize a curve as GraphicEQ.
+
+    When config is omitted, the curve is serialized on its existing point grid
+    without applying additional output constraints.
+    """
     export_curve = build_export_curve(eq_curve, config)
-    str_adjustments = ['%.1f' % level for level in export_curve.domain_values]
-    eq_points = map(lambda point: "%g" % point, export_curve.domain_frequencies)
+    str_adjustments = [f"{level:.1f}" for level in export_curve.domain_values]
+    eq_points = map(lambda point: f"{point:g}", export_curve.domain_frequencies)
 
     freq_boost_tuples = zip(eq_points, str_adjustments)
     combo = map(" ".join, freq_boost_tuples)
@@ -338,12 +344,12 @@ def format_eq_str(eq_curve: Curve, config: EQConfig | None = None) -> str:
 
 
 def get_graph_eq_str(
-        measurements_dir: str | None = None,
-        file_paths: Sequence[str] | None = None,
-        eq_config: EQConfig | None = None,
-        target_curve: Curve | None = None,
-        draw: bool = False,
-        verbose: bool = False,
+    measurements_dir: str | None = None,
+    file_paths: Sequence[str] | None = None,
+    eq_config: EQConfig | None = None,
+    target_curve: Curve | None = None,
+    draw: bool = False,
+    verbose: bool = False,
 ) -> str:
     if eq_config is None:
         eq_config = EQConfig()

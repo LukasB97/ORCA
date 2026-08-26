@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import enum
+from typing import cast
 
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.ndimage import gaussian_filter1d  # type: ignore[import-untyped]
-from typing import cast
 
 from .Types import FloatArray
 

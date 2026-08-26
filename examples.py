@@ -1,9 +1,7 @@
 from pathlib import Path
 
-from orca import TargetCurves
+from orca import TargetCurves, create_eq, format_eq_str, get_graph_eq_str
 from orca.EQConfig import EQConfig
-from orca.RewToGraphEq import create_eq, format_eq_str, get_graph_eq_str
-
 
 EXAMPLE_MEASUREMENTS = Path(__file__).parent / "example measurements"
 

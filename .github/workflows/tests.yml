@@ -37,4 +37,6 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install ".[dev]"
+      - run: python -m ruff check .
+      - run: python -m ruff format --check .
       - run: python -m mypy

@@ -10,7 +10,6 @@ from . import WeightingFuns
 from .Types import WeightingFunction
 from .Utils import log_spaced_ints
 
-
 _DEFAULT_WEIGHTING = WeightingFuns.linear()
 
 
@@ -40,10 +39,7 @@ class EQConfig:
             raise ValueError("eq_points must contain at least two frequencies")
         if any(not math.isfinite(point) or point <= 0 for point in normalized_points):
             raise ValueError("eq_points must contain finite frequencies greater than 0")
-        if any(
-            left >= right
-            for left, right in zip(normalized_points, normalized_points[1:])
-        ):
+        if any(left >= right for left, right in zip(normalized_points, normalized_points[1:])):
             raise ValueError("eq_points must be strictly increasing without duplicates")
         if not isinstance(set_max_zero, bool):
             raise ValueError("set_max_zero must be a boolean")

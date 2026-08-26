@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import os
 import math
+import os
 from collections.abc import Iterable
-from pathlib import Path
 from os import PathLike
+from pathlib import Path
 
 from .Curve import Curve
 
@@ -18,7 +18,7 @@ def _parse_rew_float(value: str, raw_line: str) -> float:
                 return float(value.replace(",", "."))
             except ValueError:
                 pass
-        raise ValueError(f"Invalid REW data row: {raw_line!r}")
+        raise ValueError(f"Invalid REW data row: {raw_line!r}") from None
 
 
 def read_hz_and_spl(rew_str: str) -> tuple[list[float], list[float]]:

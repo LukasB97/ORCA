@@ -13,12 +13,7 @@ def avg(elements: Collection[float]) -> float:
 
 
 def log_spaced(start: float, end: float, count: int = 128) -> FloatArray:
-    return np.logspace(
-        math.log10(start),
-        math.log10(end),
-        count,
-        endpoint=True
-    )
+    return np.logspace(math.log10(start), math.log10(end), count, endpoint=True)
 
 
 def log_spaced_ints(
@@ -66,5 +61,3 @@ def log_spaced_ints(
         indices = np.linspace(0, len(ints) - 1, count)
         ints = [ints[round(index)] for index in indices]
     return ints
-
-

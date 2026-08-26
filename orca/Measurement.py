@@ -19,16 +19,14 @@ class Measurement:
         self,
         hz: SupportsFloat,
         smoothing_factor: SmoothingFactor = SmoothingFactor.NO_SMOOTHING,
-    ) -> float:
-        ...
+    ) -> float: ...
 
     @overload
     def eval(
         self,
         hz: Iterable[SupportsFloat],
         smoothing_factor: SmoothingFactor = SmoothingFactor.NO_SMOOTHING,
-    ) -> list[float]:
-        ...
+    ) -> list[float]: ...
 
     def eval(
         self,
