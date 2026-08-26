@@ -85,3 +85,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     except (OSError, PlottingDependencyError, ValueError) as exc:
         parser.exit(2, f"{parser.prog}: error: {exc}\n")
     print(eq_str)
+
+
+if __name__ == "__main__":
+    main()

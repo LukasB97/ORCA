@@ -64,7 +64,11 @@ def get_all_txt_files(dir_path: str | PathLike[str]) -> list[str]:
     path = Path(dir_path)
     if not path.is_dir():
         raise ValueError(f"Measurement directory does not exist: {dir_path}")
-    return [str(file_path) for file_path in sorted(path.glob("*.txt"))]
+    return [
+        str(file_path)
+        for file_path in sorted(path.iterdir())
+        if file_path.is_file() and file_path.suffix.casefold() == ".txt"
+    ]
 
 
 def curve_from_rew_file(rew_file_path: str | PathLike[str]) -> Curve:

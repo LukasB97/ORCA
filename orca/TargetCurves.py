@@ -12,7 +12,7 @@ def _create_target_curve(
     interpolation_alg: str = "linear",
 ) -> Curve:
     if interpolation_alg != "linear" and len(freq_to_level) < 4:
-        raise ValueError()
+        raise ValueError("Non-linear target curves require at least four points")
 
     frequencies = list(freq_to_level.keys())
     frequencies.sort()

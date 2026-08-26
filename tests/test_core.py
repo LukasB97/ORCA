@@ -18,7 +18,7 @@ from orca.BoostComputation import minimize
 from orca.cli import main
 from orca.Curve import Curve, PlottingDependencyError
 from orca.EQConfig import EQConfig
-from orca.FileReader import curve_from_rew_file, get_files, read_hz_and_spl
+from orca.FileReader import curve_from_rew_file, get_all_txt_files, get_files, read_hz_and_spl
 from orca.RewToGraphEq import (
     _build_deviation_curves,
     _estimate_error_stats,
@@ -27,6 +27,7 @@ from orca.RewToGraphEq import (
     create_eq,
     format_eq_str,
 )
+from orca.TargetCurves import _create_target_curve
 from orca.Utils import log_spaced_ints
 from orca.Wavelet import WAVELET_POINTS
 from orca.Wavelet import config as wavelet_config
@@ -68,6 +69,18 @@ class ImportAndCurveTests(unittest.TestCase):
         )
 
         self.assertEqual(result.stdout.strip(), "False")
+
+    def test_module_entrypoints_show_cli_help(self):
+        for module_name in ("orca", "orca.cli"):
+            with self.subTest(module_name=module_name):
+                result = subprocess.run(
+                    [sys.executable, "-m", module_name, "--help"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+
+                self.assertIn("Create a GraphicEQ string", result.stdout)
 
     def test_curve_draw_reports_missing_plotting_dependency(self):
         curve = Curve([100, 1000], [0, 0])
@@ -122,6 +135,10 @@ class ImportAndCurveTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "Reference frequency range"):
             curve.to_deviation_curve()
+
+    def test_non_linear_target_curve_error_is_informative(self):
+        with self.assertRaisesRegex(ValueError, "at least four points"):
+            _create_target_curve({100: 0, 1000: 0, 10000: 0}, "quadratic")
 
     def test_curve_operations_reject_non_overlapping_domains(self):
         left = Curve([10, 20], [0, 1])
@@ -231,6 +248,18 @@ class FileReaderTests(unittest.TestCase):
         self.assertEqual(Path.cwd(), before)
         self.assertEqual(len(files), 5)
         self.assertTrue(all(Path(file).suffix == ".txt" for file in files))
+
+    def test_directory_reader_accepts_txt_case_insensitively_and_files_only(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "lower.txt").touch()
+            (directory / "upper.TXT").touch()
+            (directory / "ignored.csv").touch()
+            (directory / "directory.txt").mkdir()
+
+            files = get_all_txt_files(directory)
+
+        self.assertEqual({Path(file).name for file in files}, {"lower.txt", "upper.TXT"})
 
     def test_get_files_does_not_mutate_supplied_file_list(self):
         supplied_files = [str(EXAMPLE_MEASUREMENTS / "Sep 13.txt")]
@@ -385,6 +414,10 @@ class ConfigAndEndToEndTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "finite frequencies"):
                     EQConfig(eq_points=points)
 
+    def test_eq_config_rejects_eq_points_that_overflow_float(self):
+        with self.assertRaisesRegex(ValueError, "numeric frequencies"):
+            EQConfig(eq_points=[100, 10**400])
+
     def test_eq_config_rejects_invalid_output_options(self):
         invalid_options = (
             {"set_max_zero": 1},
@@ -409,6 +442,15 @@ class ConfigAndEndToEndTests(unittest.TestCase):
         config = EQConfig(max_boost=10**27)
 
         self.assertEqual(config.max_boost, float(10**27))
+
+    def test_max_boost_rejects_values_that_overflow_float(self):
+        with self.assertRaisesRegex(ValueError, "finite number"):
+            EQConfig(max_boost=10**400)
+
+    def test_max_boost_accepts_large_finite_float(self):
+        config = EQConfig(max_boost=1e308)
+
+        self.assertEqual(config.max_boost, 1e308)
 
     def test_max_boost_accepts_real_number_implementations(self):
         config = EQConfig(max_boost=Fraction(1, 10))
@@ -577,6 +619,15 @@ class ConfigAndEndToEndTests(unittest.TestCase):
                     Curve([20, 101, 1000], [0, 0, 0]),
                 ],
                 file_paths=["first.txt", "second.txt"],
+            )
+
+    def test_measurements_reject_even_minimal_grid_differences(self):
+        with self.assertRaisesRegex(ValueError, "frequency grids differ"):
+            _validate_measurement_grids(
+                [
+                    Curve([20, 100, 1000], [0, 0, 0]),
+                    Curve([20, math.nextafter(100, math.inf), 1000], [0, 0, 0]),
+                ]
             )
 
     def test_cli_rejects_missing_input(self):

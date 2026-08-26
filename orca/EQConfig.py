@@ -33,7 +33,7 @@ class EQConfig:
 
         try:
             normalized_points = tuple(float(point) for point in points)
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError("eq_points must contain numeric frequencies") from exc
         if len(normalized_points) < 2:
             raise ValueError("eq_points must contain at least two frequencies")
@@ -45,11 +45,13 @@ class EQConfig:
             raise ValueError("set_max_zero must be a boolean")
         if isinstance(max_boost, bool) or not isinstance(max_boost, Real):
             raise ValueError("max_boost must be a finite number")
-        normalized_max_boost = float(max_boost)
+        try:
+            normalized_max_boost = float(max_boost)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("max_boost must be a finite number") from exc
         if not math.isfinite(normalized_max_boost):
             raise ValueError("max_boost must be a finite number")
-        scaled_max_boost = normalized_max_boost * 10
-        if scaled_max_boost != round(scaled_max_boost):
+        if normalized_max_boost != round(normalized_max_boost, 1):
             raise ValueError("max_boost must have at most one decimal place")
         if not callable(weighting_fun):
             raise ValueError("weighting_fun must be callable")

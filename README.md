@@ -35,6 +35,11 @@ You can also run the command line entrypoint:
 
         orca-eq --measurements-dir "example measurements"
 
+The equivalent Python module entrypoints are also available:
+
+        python -m orca --measurements-dir "example measurements"
+        python -m orca.cli --measurements-dir "example measurements"
+
 For a band-limited measurement, choose the frequency range used for SPL normalization explicitly:
 
         eq_str = get_graph_eq_str(

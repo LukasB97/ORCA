@@ -6,6 +6,10 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+build/
+dist/
+.mypy_cache/
+.ruff_cache/
 
 notex.txt
 
