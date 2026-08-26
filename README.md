@@ -1,155 +1,270 @@
 # ORCA
 
-ORCA generates an equalizer that corrects a loudspeaker's in-room frequency response (FR) toward a specified target curve.
+**Turn Room EQ Wizard measurements into a ready-to-import GraphicEQ room-correction filter.**
 
-Most room correction algorithms create parametric filters to improve a loudspeaker's in-room FR.
+[![Tests](https://github.com/LukasB97/ORCA/actions/workflows/tests.yml/badge.svg)](https://github.com/LukasB97/ORCA/actions/workflows/tests.yml)
+![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-ORCA creates a detailed GraphicEQ definition that can be imported into software equalizers such as Equalizer APO or Wavelet.
+ORCA takes one or more frequency-response measurements exported from
+[Room EQ Wizard (REW)](https://www.roomeqwizard.com/), calculates a correction curve, and
+outputs a `GraphicEQ` definition for software equalizers such as
+[Wavelet](https://pittvandewitt.github.io/Wavelet/) and
+[Equalizer APO](https://sourceforge.net/projects/equalizerapo/).
 
-This is especially useful for applying room correction to a Bluetooth speaker through Wavelet.
+Unlike workflows built around a small set of parametric filters, ORCA optimizes the actual
+GraphicEQ control points that will be exported. The result can follow room-response problems in
+detail while becoming progressively smoother toward higher frequencies.
 
-You can customize the target curve and the generated equalizer.
+![Measured room response, ORCA target, estimated corrected response, and generated equalizer](docs/assets/orca-readme-overview.png)
 
-## Usage
+## Why ORCA?
 
-To use the algorithm, you need to export FR measurements as *.txt files from REW.
-![Average fr of all measurements](https://user-images.githubusercontent.com/28658521/193836087-6095f64e-2b85-4b0f-8038-55ae23231b57.png)
+- **Go from measurements to an importable filter.** Point ORCA at a directory of REW exports and
+  receive a complete `GraphicEQ:` definition on standard output.
+- **Correct the listening area, not only one microphone position.** ORCA level-aligns and combines
+  multiple measurements before optimizing the filter.
+- **Avoid unrealistic bass boost.** The target automatically follows the measured low-frequency
+  roll-off where correction would otherwise cost headroom and increase distortion.
+- **Choose the output you need.** Use the default 128-point layout, the more detailed 256-point
+  layout, Wavelet's fixed frequency grid, or your own control points and target curve.
+- **See what changed.** Optional diagnostics compare the original and estimated corrected response
+  without contaminating the exported GraphicEQ output.
 
-Install the project locally:
+## How it works
 
-        pip install -e .
+1. Measure the loudspeaker at one or more listening positions in REW.
+2. Export every frequency response as a text file and run ORCA on the files.
+3. Save the generated `GraphicEQ` line and import it into Wavelet, Equalizer APO, or another
+   compatible equalizer.
 
-If you want to use diagnostic plots, install the optional plotting dependency:
+## Quick start
 
-        pip install -e ".[plot]"
+### 1. Export measurements from REW
 
-The simplest way is to either supply a list of paths to REW files or a directory with the files.
+In REW, export each measurement as a text file containing frequency and SPL columns. Put the
+exports in one directory. All measurements must use the same frequency grid.
 
-        from orca import get_graph_eq_str
+### 2. Install ORCA
 
-        eq_str = get_graph_eq_str(file_paths=["path/to/file1", "path/to/file2", "path/to/file3"])
-        # Or if all measurements are inside a directory:
-        eq_str = get_graph_eq_str(measurements_dir="path/to/measurement/dir")
+Install the current version directly from GitHub:
 
-You can also run the command line entrypoint:
+```console
+python -m pip install "orca @ git+https://github.com/LukasB97/ORCA.git"
+```
 
-        orca-eq --measurements-dir "example measurements"
+Or install an editable checkout:
 
-The equivalent Python module entrypoints are also available:
+```console
+git clone https://github.com/LukasB97/ORCA.git
+cd ORCA
+python -m pip install -e .
+```
 
-        python -m orca --measurements-dir "example measurements"
-        python -m orca.cli --measurements-dir "example measurements"
+ORCA requires Python 3.9 or newer.
 
-For a band-limited measurement, choose the frequency range used for SPL normalization explicitly:
+### 3. Generate a filter
 
-        from orca.EQConfig import EQConfig
+For Wavelet, select its fixed GraphicEQ frequency layout and write the result to a file:
 
-        subwoofer_config = EQConfig.from_range(eq_from=20, eq_to=80, eq_res=32)
-        eq_str = get_graph_eq_str(
-            measurements_dir="path/to/subwoofer/measurements",
-            eq_config=subwoofer_config,
-            reference_range=(30, 80),
-        )
+```console
+orca-eq --measurements-dir "path/to/rew-exports" --config wavelet > GraphicEQ.txt
+```
 
-        orca-eq --measurements-dir "path/to/subwoofer/measurements" --eq-from 20 --eq-to 80 --eq-res 32 --reference-from 30 --reference-to 80
+For the default 128-point layout:
 
-From a checkout, you can also run `python main.py --measurements-dir "example measurements"`.
+```console
+orca-eq --measurements-dir "path/to/rew-exports" > GraphicEQ.txt
+```
 
-By default, the target curve is flat and the equalizer contains 128 logarithmically spaced points from 20 to 20000 Hz.
+The generated file contains one line in this format:
 
-Measurements are level-normalized against the shared 100-10000 Hz range by default.
-This range provides a useful SPL reference for full-range measurements without letting bass roll-off, room modes, or high-frequency directivity dominate the level estimate.
-Use `reference_range` to select another range for band-limited measurements.
-Every measurement must fully cover the selected range.
-All positive frequencies from the REW export are preserved, including values below 20 Hz.
-All supplied measurements must use the same logarithmic frequency grid.
-ORCA evaluates the equalizer at every point of that native measurement grid while optimizing only the GraphicEQ control points that will be exported.
+```text
+GraphicEQ: 20 -2.1; 21 -0.6; 22 -1.1; ...; 18812 -2.5; 19871 -2.5
+```
 
-With `verbose=True` or the CLI's `--verbose` flag, ORCA reports the level-aligned mean absolute deviation from the target and its 95th percentile for the original and estimated equalized responses.
-Diagnostics are written to standard error so standard output remains a valid GraphicEQ definition.
-Level alignment excludes the overall playback-volume change introduced by anchoring the maximum EQ gain at 0 dB while retaining every frequency-dependent error.
+From a checkout, you can try ORCA immediately with the included measurements:
 
-More usage examples are available in `examples.py`.
+```console
+orca-eq --measurements-dir "example measurements" --config wavelet --verbose > GraphicEQ.txt
+```
 
-ORCA adjusts the target curve to the measured bass response to avoid excessive boost, reduced overall volume, and distortion.
-![Adjusted target curve](https://user-images.githubusercontent.com/28658521/193834396-a3b99590-4d1f-4b0b-bd5f-9eb6920f142c.png)
+`--verbose` prints the level-aligned mean absolute deviation and its 95th percentile to standard
+error. Standard output remains a clean GraphicEQ definition, so redirecting it to a file is safe.
 
-In the next step, an equalization curve is created to minimize the deviation from the target.
+## Python API
 
-The EQ curve becomes smoother toward higher frequencies.
-Custom weighting functions can change this behavior.
+Generate a Wavelet-compatible filter and save it:
 
-![Created eq](https://user-images.githubusercontent.com/28658521/193834404-aaa57282-302e-454b-a4cc-78070a3bf154.png)
+```python
+from pathlib import Path
 
-You also get an estimation of the in-room FR after equalization.
-![FR after eq estimation](https://user-images.githubusercontent.com/28658521/193834392-6f8e556e-2a90-462a-bfc5-82cb79dc3485.png)
-## Customizing
+from orca import get_graph_eq_str, wavelet_config
 
-Pass an `EQConfig` to `get_graph_eq_str` or `create_eq` to customize the generated EQ definition.
+graphic_eq = get_graph_eq_str(
+    measurements_dir="path/to/rew-exports",
+    eq_config=wavelet_config(),
+)
+Path("GraphicEQ.txt").write_text(graphic_eq + "\n", encoding="utf-8")
+```
 
-### EQConfig
+You can also pass individual files:
 
-        from orca.EQConfig import EQConfig
+```python
+from orca import get_graph_eq_str
 
-`EQConfig.from_range(eq_from=20, eq_to=20000, eq_res=128)` creates logarithmically spaced integer control points between the supplied frequency bounds.
+graphic_eq = get_graph_eq_str(
+    file_paths=[
+        "measurements/left.txt",
+        "measurements/center.txt",
+        "measurements/right.txt",
+    ]
+)
+```
 
-- `eq_points` can be supplied instead of `eq_from`, `eq_to`, and `eq_res`.
-  The points must be finite, positive, unique, and strictly increasing.
-- `set_max_zero=True` anchors the maximum EQ gain at 0 dB.
-  The complete curve is shifted while preserving the relative differences between EQ points.
-- `max_boost=10` sets the maximum boost when `set_max_zero=False`.
-  The value must have at most one decimal place to match the exported GraphicEQ gains.
-- `weighting_fun` applies weighting based on the smoothing factor and frequency.
+### Choose a target curve
 
-Wavelet's fixed GraphicEQ frequency layout lives in its own module:
+The default target is flat. Built-in alternatives include downward-sloping targets, a downward
+slope with a flatter upper-mid section, and a V-shaped target:
 
-        from orca import wavelet_config
+```python
+from orca import TargetCurves, get_graph_eq_str
 
-        eq_config = wavelet_config()
+graphic_eq = get_graph_eq_str(
+    measurements_dir="path/to/rew-exports",
+    target_curve=TargetCurves.downwards_slope(factor=0.5),
+)
+```
 
-`format_eq_str(eq_curve)` serializes the curve's existing control points and values without applying additional constraints.
-Pass `format_eq_str(eq_curve, config=eq_config)` when the curve should be resampled to another configured point grid or have that config's output constraints applied.
+A target is a regular `Curve`, so applications can also construct their own target shape.
+
+### Configure the GraphicEQ grid
+
+Use `EQConfig.from_range()` for a logarithmically spaced custom grid:
+
+```python
+from orca import get_graph_eq_str
+from orca.EQConfig import EQConfig
+
+config = EQConfig.from_range(eq_from=30, eq_to=18_000, eq_res=256)
+graphic_eq = get_graph_eq_str(
+    measurements_dir="path/to/rew-exports",
+    eq_config=config,
+)
+```
+
+The main configuration options are:
+
+| Option | Default | Purpose |
+| --- | ---: | --- |
+| `eq_points` | 128 points, 20–20,000 Hz | Exact GraphicEQ control frequencies |
+| `set_max_zero` | `True` | Shifts the complete EQ so its highest gain is 0 dB |
+| `max_boost` | `10.0` dB | Boost ceiling when `set_max_zero=False` |
+| `weighting_fun` | frequency-dependent smoothing | Controls how strongly each optimization pass changes the EQ |
+
+`format_eq_str(eq_curve)` preserves a curve's existing control points. Pass a configuration as
+`format_eq_str(eq_curve, config=config)` to resample the curve and apply that configuration's output
+constraints.
+
+### Correct a limited frequency range
+
+For a band-limited measurement, choose both the EQ range and the frequency range used for SPL
+normalization:
+
+```python
+from orca import get_graph_eq_str
+from orca.EQConfig import EQConfig
+
+subwoofer_config = EQConfig.from_range(eq_from=20, eq_to=80, eq_res=32)
+graphic_eq = get_graph_eq_str(
+    measurements_dir="path/to/subwoofer-measurements",
+    eq_config=subwoofer_config,
+    reference_range=(30, 80),
+)
+```
+
+The equivalent CLI command is:
+
+```console
+orca-eq --measurements-dir "path/to/subwoofer-measurements" \
+  --eq-from 20 --eq-to 80 --eq-res 32 \
+  --reference-from 30 --reference-to 80 > SubwooferEQ.txt
+```
+
+## CLI reference
+
+| Option | Description |
+| --- | --- |
+| `--measurements-dir DIR` | Read every `.txt` measurement in a directory |
+| `--file FILE` | Read one measurement; repeat the option for multiple files |
+| `--config default\|detail\|wavelet` | Select the 128-point, 256-point, or Wavelet layout |
+| `--eq-from`, `--eq-to`, `--eq-res` | Build a custom logarithmic control-point grid |
+| `--reference-from`, `--reference-to` | Change the SPL normalization range |
+| `--verbose` | Print before/after error estimates to standard error |
+| `--draw` | Show diagnostic plots; requires the optional plotting dependency |
+
+From a checkout, install plotting support with:
+
+```console
+python -m pip install -e ".[plot]"
+```
+
+The same CLI is available through `python -m orca` and `python -m orca.cli`.
+
+## What ORCA does
+
+ORCA first normalizes every measurement against their shared 100–10,000 Hz range. This gives the
+measurements a common playback level without allowing bass roll-off, room modes, or high-frequency
+directivity to dominate the reference. For band-limited measurements, use `reference_range` or the
+matching CLI options instead.
+
+It then:
+
+1. combines the normalized measurements into an average in-room response;
+2. adapts the low-frequency target where achieving the requested curve would require excessive
+   boost;
+3. optimizes the configured GraphicEQ control-point gains over several passes, from strongly
+   smoothed measurements to the original unsmoothed data;
+4. evaluates every candidate EQ on the measurements' native frequency grid; and
+5. estimates the response produced by applying the exported, finite-resolution GraphicEQ curve.
+
+Later passes and higher frequencies receive smaller changes. This is what makes the generated EQ
+progressively smoother toward high frequencies. A custom weighting function can change that
+behavior.
+
+## Measurement requirements and expectations
+
+- Every input must be a readable REW text export with positive frequency values and SPL data.
+- All measurements must use the same frequency grid.
+- Every measurement must fully cover the selected SPL reference range.
+- ORCA preserves positive measurement frequencies outside the default 20–20,000 Hz EQ range, while
+  exporting only the configured GraphicEQ control points.
+- The corrected response is an estimate. Measure the system again after applying the filter to
+  verify the result at the intended listening positions.
+- Digital equalization cannot repair deep acoustic nulls, excessive reverberation, poor speaker
+  placement, or a loudspeaker operating beyond its physical limits.
 
 ## Development
 
-Run the complete test suite from the repository root with:
+Install the development dependencies and run all checks from the repository root:
 
-        python -m unittest discover -v
+```console
+python -m pip install -e ".[dev]"
+python -m unittest discover -v
+python -m ruff check .
+python -m ruff format --check .
+python -m mypy
+```
 
-Install the development dependencies and run the quality checks with:
+To regenerate the README overview image from the included REW exports, install plotting support
+separately and run the generator:
 
-        pip install -e ".[dev]"
-        python -m ruff check .
-        python -m ruff format --check .
-        python -m mypy
+```console
+python -m pip install -e ".[plot]"
+python docs/generate_readme_assets.py
+```
 
-## The Algorithm
-
-To compute an equalizer, ORCA optimizes the configured GraphicEQ control-point gains directly.
-The piecewise-linear curve produced by those points is evaluated at every frequency in the original measurement grid.
-If that grid is too sparse to constrain every control-point gain, ORCA supplements it with the configured control frequencies.
-This ensures that the optimization sees every degree of freedom in the same finite-resolution filter that will be exported.
-
-For each of the frequencies, the process is as follows:
-
-We take a strongly smoothed version of each measurement and compare the target level to the current SPL.
-Smoothing widths are defined in octaves, so they do not change when the measurement grid has a different point density.
-
-We look for a dB adjustment at every measured frequency to minimize the error between the target and equalized SPL.
-A least-squares projection then finds the GraphicEQ point updates whose interpolated curve best realizes those adjustments over the complete measurement grid.
-
-The boost is adjusted over multiple iterations with decreasingly smoothed measurements.
-
-In each iteration, we take the difference between the adjusted current level and the target level.
-
-This difference gets weighted and added to the current dB adjustment.
-
-We repeat this process until reaching the raw, unsmoothed measurements.
-
-Higher frequencies and later iterations reduce the amount by which the boost changes.
-
-This creates an EQ that becomes smoother toward higher frequencies.
-Pass a custom weighting function to `EQConfig` to change the weighting process.
+Additional Python examples are available in [`examples.py`](examples.py).
 
 ## License
 
