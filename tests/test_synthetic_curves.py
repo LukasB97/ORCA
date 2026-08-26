@@ -96,6 +96,7 @@ class SyntheticCurveTests(unittest.TestCase):
             [measurement],
             TargetCurves.linear(),
             config,
+            reference_range=(100, 800),
         )
         corrected_peak = measurement.curve(200) + eq(200)
 
@@ -129,7 +130,21 @@ class SyntheticCurveTests(unittest.TestCase):
 
         np.testing.assert_allclose(eq.domain_values, -10, atol=0.01)
 
-    def test_zero_anchor_uses_full_grid_when_reference_band_is_absent(self):
+    def test_calc_eq_rejects_measurements_that_do_not_cover_reference_range(self):
+        measurement = Measurement(Curve([20, 40, 80], [0, 0, 0]))
+        config = EQConfig(
+            eq_points=[20, 80],
+            weighting_fun=WeightingFuns.no_smoothing(),
+        )
+
+        with self.assertRaisesRegex(ValueError, "must fully cover"):
+            calc_eq_curve(
+                [measurement],
+                TargetCurves.linear(),
+                config,
+            )
+
+    def test_calc_eq_uses_explicit_reference_range_for_band_limited_measurement(self):
         measurement = Measurement(Curve([20, 40, 80], [0, 0, 0]))
         config = EQConfig(
             eq_points=[20, 80],
@@ -140,6 +155,7 @@ class SyntheticCurveTests(unittest.TestCase):
             [measurement],
             TargetCurves.linear(),
             config,
+            reference_range=(20, 80),
         )
 
         np.testing.assert_allclose(eq.domain_values, 0, atol=0.01)

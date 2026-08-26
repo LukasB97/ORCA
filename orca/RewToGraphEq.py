@@ -17,8 +17,7 @@ from .Measurement import Measurement
 from .Smoothing import SmoothingFactor
 from .Types import BoolArray, FloatArray
 
-REFERENCE_FROM = 100
-REFERENCE_TO = 10000
+DEFAULT_REFERENCE_RANGE = (100.0, 10000.0)
 EQ_POINT_RANGE_TOLERANCE = 0.02
 
 
@@ -34,15 +33,41 @@ def _get_common_frequency_range(curves: Sequence[Curve]) -> tuple[float, float]:
     return start, end
 
 
-def _build_deviation_curves(curves: Sequence[Curve]) -> list[Curve]:
-    common_from, common_to = _get_common_frequency_range(curves)
-    reference_from = max(REFERENCE_FROM, common_from)
-    reference_to = min(REFERENCE_TO, common_to)
+def _validate_reference_range(
+    reference_range: tuple[float, float],
+) -> tuple[float, float]:
+    try:
+        reference_from, reference_to = (float(value) for value in reference_range)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("reference_range must contain exactly two numeric frequencies") from exc
+    if not math.isfinite(reference_from) or not math.isfinite(reference_to):
+        raise ValueError("Reference frequencies must be finite")
+    if reference_from <= 0 or reference_to <= 0:
+        raise ValueError("Reference frequencies must be greater than 0")
     if reference_from >= reference_to:
+        raise ValueError("Reference frequency range must be increasing")
+    return reference_from, reference_to
+
+
+def _require_reference_coverage(
+    curves: Sequence[Curve],
+    reference_range: tuple[float, float],
+) -> tuple[float, float]:
+    reference_from, reference_to = _validate_reference_range(reference_range)
+    common_from, common_to = _get_common_frequency_range(curves)
+    if common_from > reference_from or common_to < reference_to:
         raise ValueError(
-            "Measurements do not have an overlapping reference range between "
-            f"{REFERENCE_FROM} Hz and {REFERENCE_TO} Hz"
+            f"Measurements must fully cover the reference range {reference_from:g}-"
+            f"{reference_to:g} Hz; their common range is {common_from:g}-{common_to:g} Hz"
         )
+    return reference_from, reference_to
+
+
+def _build_deviation_curves(
+    curves: Sequence[Curve],
+    reference_range: tuple[float, float] = DEFAULT_REFERENCE_RANGE,
+) -> list[Curve]:
+    reference_from, reference_to = _require_reference_coverage(curves, reference_range)
 
     return [
         curve.to_deviation_curve(from_freq=reference_from, to_freq=reference_to) for curve in curves
@@ -136,11 +161,17 @@ def _apply_output_constraints(levels: ArrayLike, config: EQConfig) -> FloatArray
     return cast(FloatArray, np.minimum(level_array, config.max_boost))
 
 
-def _reference_mask(frequencies: ArrayLike) -> BoolArray:
+def _reference_mask(
+    frequencies: ArrayLike,
+    reference_range: tuple[float, float] = DEFAULT_REFERENCE_RANGE,
+) -> BoolArray:
+    reference_from, reference_to = _validate_reference_range(reference_range)
     frequency_array = np.asarray(frequencies, dtype=float)
-    mask = (frequency_array >= REFERENCE_FROM) & (frequency_array <= REFERENCE_TO)
+    mask = (frequency_array >= reference_from) & (frequency_array <= reference_to)
     if not np.any(mask):
-        mask = np.ones(len(frequency_array), dtype=bool)
+        raise ValueError(
+            f"Reference range {reference_from:g}-{reference_to:g} Hz contains no frequency points"
+        )
     return mask
 
 
@@ -148,6 +179,7 @@ def calc_eq_curve(
     measurements: Sequence[Measurement],
     target_curve: Curve,
     eq_config: EQConfig,
+    reference_range: tuple[float, float] = DEFAULT_REFERENCE_RANGE,
 ) -> Curve:
     """
     Calculates a Graphic Equalizer for multiple measurements and a target curve.
@@ -158,6 +190,7 @@ def calc_eq_curve(
     :param eq_config: configuration for the eq generation
     :param measurements: List of deviation curves
     :param target_curve: A curve that represents the eq target
+    :param reference_range: Frequency range used for level alignment
     :return: EQ curve on the configured GraphicEQ point grid
     """
     if not measurements:
@@ -165,6 +198,7 @@ def calc_eq_curve(
 
     curves = [measurement.curve for measurement in measurements]
     measurement_points = _validate_measurement_grids(curves)
+    reference_range = _require_reference_coverage(curves, reference_range)
     eq_points = _validate_eq_points_in_range(curves[0], eq_config.eq_points)
     evaluation_points = measurement_points
     interpolation = _build_interpolation_matrix(eq_points, evaluation_points)
@@ -176,7 +210,7 @@ def calc_eq_curve(
         math.log(evaluation_points[-1]) - math.log(evaluation_points[0])
     )
     point_levels: FloatArray = np.zeros(len(eq_points), dtype=float)
-    reference_mask = _reference_mask(evaluation_points)
+    reference_mask = _reference_mask(evaluation_points, reference_range)
 
     for iteration, smoothing_factor in enumerate(SmoothingFactor):
         current_boost = interpolation @ point_levels
@@ -222,11 +256,12 @@ def _estimate_error_stats(
     label: str,
     verbose: bool = False,
     align_level: bool = False,
+    reference_range: tuple[float, float] = DEFAULT_REFERENCE_RANGE,
 ) -> tuple[float, float]:
     response_offset = 0.0
     if align_level:
         frequencies = estimated_response.domain_frequencies
-        mask = _reference_mask(frequencies)
+        mask = _reference_mask(frequencies, reference_range)
         reference_points = np.asarray(frequencies)[mask]
         response_offset = float(
             np.mean(
@@ -275,6 +310,7 @@ def create_eq(
     target_curve: Curve | None = None,
     draw: bool = False,
     verbose: bool = False,
+    reference_range: tuple[float, float] = DEFAULT_REFERENCE_RANGE,
 ) -> Curve:
     if eq_config is None:
         eq_config = EQConfig()
@@ -284,7 +320,8 @@ def create_eq(
     file_paths = get_files(dir_path=measurements_dir, file_paths=file_paths)
     raw_curves = [curve_from_rew_file(file_path) for file_path in file_paths]
     _validate_measurement_grids(raw_curves, file_paths=file_paths)
-    curves = _build_deviation_curves(raw_curves)
+    reference_range = _require_reference_coverage(raw_curves, reference_range)
+    curves = _build_deviation_curves(raw_curves, reference_range)
 
     avg = Curve.build_average_curve(curves)
     if draw:
@@ -297,6 +334,7 @@ def create_eq(
         "Current frequency response",
         verbose=verbose,
         align_level=True,
+        reference_range=reference_range,
     )
 
     measurements = list(map(Measurement, curves))
@@ -304,7 +342,12 @@ def create_eq(
     target_curve = TargetCurves.adjust_bass_target(target_curve, measurements)
     if draw:
         target_curve.draw("Target Curve")
-    eq_curve = calc_eq_curve(measurements, target_curve, eq_config)
+    eq_curve = calc_eq_curve(
+        measurements,
+        target_curve,
+        eq_config,
+        reference_range=reference_range,
+    )
     export_curve = build_export_curve(eq_curve, eq_config)
     estimated_eq = Curve(
         avg.domain_frequencies,
@@ -322,6 +365,7 @@ def create_eq(
         "Estimated equalized response",
         verbose=verbose,
         align_level=eq_config.set_max_zero,
+        reference_range=reference_range,
     )
 
     return eq_curve
@@ -350,6 +394,7 @@ def get_graph_eq_str(
     target_curve: Curve | None = None,
     draw: bool = False,
     verbose: bool = False,
+    reference_range: tuple[float, float] = DEFAULT_REFERENCE_RANGE,
 ) -> str:
     if eq_config is None:
         eq_config = EQConfig()
@@ -363,5 +408,6 @@ def get_graph_eq_str(
         target_curve=target_curve,
         draw=draw,
         verbose=verbose,
+        reference_range=reference_range,
     )
     return format_eq_str(eq, config=eq_config)
