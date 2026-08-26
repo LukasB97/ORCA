@@ -16,7 +16,7 @@ Unlike workflows built around a small set of parametric filters, ORCA optimizes 
 GraphicEQ control points that will be exported. The result can follow room-response problems in
 detail while becoming progressively smoother toward higher frequencies.
 
-![Measured room response, ORCA target, estimated corrected response, and generated equalizer](docs/assets/orca-overview.png)
+![Measured room response, ORCA target, estimated corrected response, and generated equalizer](docs/assets/orca-readme-overview.png)
 
 ## Why ORCA?
 

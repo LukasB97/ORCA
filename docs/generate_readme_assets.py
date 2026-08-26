@@ -19,7 +19,7 @@ from orca.Smoothing import SmoothingFactor  # noqa: E402
 
 REFERENCE_RANGE = (100.0, 10_000.0)
 MEASUREMENTS_DIR = ROOT / "example measurements"
-OUTPUT = ROOT / "docs" / "assets" / "orca-overview.png"
+OUTPUT = ROOT / "docs" / "assets" / "orca-readme-overview.png"
 
 
 def _align_to_target(curve: Curve, target: Curve) -> Curve:
