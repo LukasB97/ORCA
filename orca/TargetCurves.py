@@ -20,48 +20,28 @@ def _create_target_curve(
     for freq in frequencies:
         boost.append(freq_to_level[freq])
 
-    return Curve(frequencies,
-                 boost,
-                 interpolation_alg=interpolation_alg
-                 )
+    return Curve(frequencies, boost, interpolation_alg=interpolation_alg)
 
 
 def linear() -> Curve:
-    return _create_target_curve({
-        1: 0,
-        500: 0,
-        4000: 0,
-        25000: 0
-    })
+    return _create_target_curve({1: 0, 500: 0, 4000: 0, 25000: 0})
 
 
 def downwards_slope(factor: float = 1) -> Curve:
-    return _create_target_curve({
-        1: 0,
-        20000: -10 * factor
-    })
+    return _create_target_curve({1: 0, 20000: -10 * factor})
 
 
 def downwards_slope_linear_upper_mids(factor: float = 1) -> Curve:
-    return _create_target_curve({
-        1: 0,
-        1000: -5 * factor,
-        6000: -5 * factor,
-        20000: -10 * factor,
-        25000: -10 * factor
-    })
+    return _create_target_curve(
+        {1: 0, 1000: -5 * factor, 6000: -5 * factor, 20000: -10 * factor, 25000: -10 * factor}
+    )
 
 
 def v_shape(factor: float = 1) -> Curve:
-    return _create_target_curve({
-        1: -5,
-        20: 0,
-        100: 0,
-        300: -5 * factor,
-        3000: 0,
-        10000: -5 * factor,
-        20000: -10 * factor
-    }, "quadratic")
+    return _create_target_curve(
+        {1: -5, 20: 0, 100: 0, 300: -5 * factor, 3000: 0, 10000: -5 * factor, 20000: -10 * factor},
+        "quadratic",
+    )
 
 
 def adjust_bass_target(
@@ -70,9 +50,7 @@ def adjust_bass_target(
     max_boost: float = 5,
     upper_bound: float = 100,
 ) -> Curve:
-    curves = [
-        m.curve.smooth(Smoothing.SmoothingFactor.LIGHT_SMOOTHING) for m in measurements
-    ]
+    curves = [m.curve.smooth(Smoothing.SmoothingFactor.LIGHT_SMOOTHING) for m in measurements]
     avg = Curve.build_average_curve(curves)
     frequencies = avg.domain_frequencies
 

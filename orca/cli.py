@@ -56,11 +56,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     if not args.measurements_dir and not args.files:
         parser.error("provide --measurements-dir or at least one --file")
 
-    eq_str = get_graph_eq_str(
-        measurements_dir=args.measurements_dir,
-        file_paths=args.files,
-        eq_config=_get_config(args.config),
-        draw=args.draw,
-        verbose=args.verbose,
-    )
+    try:
+        eq_str = get_graph_eq_str(
+            measurements_dir=args.measurements_dir,
+            file_paths=args.files,
+            eq_config=_get_config(args.config),
+            draw=args.draw,
+            verbose=args.verbose,
+        )
+    except (OSError, ValueError) as exc:
+        parser.exit(2, f"{parser.prog}: error: {exc}\n")
     print(eq_str)

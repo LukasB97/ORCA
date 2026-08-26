@@ -105,7 +105,15 @@ class SyntheticCurveTests(unittest.TestCase):
     def test_dense_control_grid_has_no_unobserved_point_gains(self):
         measurement = Measurement(Curve([100, 1000, 10000], [10, 10, 10]))
         control_points = [
-            100, 200, 400, 800, 1000, 2000, 4000, 8000, 10000,
+            100,
+            200,
+            400,
+            800,
+            1000,
+            2000,
+            4000,
+            8000,
+            10000,
         ]
         config = EQConfig(
             eq_points=control_points,

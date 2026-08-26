@@ -10,7 +10,6 @@ from . import Smoothing, Utils
 
 
 class Curve:
-
     log = 2  # Base of the used logarithm
 
     def __init__(
@@ -53,12 +52,10 @@ class Curve:
             self.fun = fun
 
     @overload
-    def __call__(self, value: SupportsFloat, /) -> float:
-        ...
+    def __call__(self, value: SupportsFloat, /) -> float: ...
 
     @overload
-    def __call__(self, values: Iterable[SupportsFloat], /) -> list[float]:
-        ...
+    def __call__(self, values: Iterable[SupportsFloat], /) -> list[float]: ...
 
     @overload
     def __call__(
@@ -67,8 +64,7 @@ class Curve:
         second: SupportsFloat,
         /,
         *rest: SupportsFloat,
-    ) -> list[float]:
-        ...
+    ) -> list[float]: ...
 
     def __call__(
         self,
@@ -101,21 +97,18 @@ class Curve:
         # of the interpolation range
         log_values = list(
             map(
-                lambda value: max(
-                    min(math.log(_validate_frequency(value), Curve.log), _max),
-                    _min),
-                values
-            ))
+                lambda value: max(min(math.log(_validate_frequency(value), Curve.log), _max), _min),
+                values,
+            )
+        )
 
         return self._eval(log_values)
 
     @overload
-    def log_eval(self, value: SupportsFloat, /) -> float:
-        ...
+    def log_eval(self, value: SupportsFloat, /) -> float: ...
 
     @overload
-    def log_eval(self, values: Iterable[SupportsFloat], /) -> list[float]:
-        ...
+    def log_eval(self, values: Iterable[SupportsFloat], /) -> list[float]: ...
 
     @overload
     def log_eval(
@@ -124,8 +117,7 @@ class Curve:
         second: SupportsFloat,
         /,
         *rest: SupportsFloat,
-    ) -> list[float]:
-        ...
+    ) -> list[float]: ...
 
     def log_eval(
         self,
@@ -138,7 +130,9 @@ class Curve:
         try:
             from matplotlib import pyplot  # type: ignore[import-not-found]
         except ImportError as exc:
-            raise RuntimeError("Plotting requires matplotlib. Install it with `pip install .[plot]`.") from exc
+            raise RuntimeError(
+                "Plotting requires matplotlib. Install it with `pip install .[plot]`."
+            ) from exc
 
         # Plotting samples the interpolated curve for a smooth visualization; this
         # does not affect the curve's stored grid or any EQ calculation.
@@ -146,21 +140,23 @@ class Curve:
         y = cast(list[float], self(x))
         pyplot.figure(dpi=300, figsize=(8.4, 4.8))
         for i in range(1, 5):
-            if 10 ** i > x[-1]:
+            if 10**i > x[-1]:
                 break
-            pyplot.axvline(10 ** i, color='grey', lw=1)  # Add vertical line to improve readability
+            pyplot.axvline(10**i, color="grey", lw=1)  # Add vertical line to improve readability
 
         current = 0
         while current >= min(y):
             current -= 5
         while current <= max(y):
-            pyplot.axhline(current, color='grey', lw=1)  # Add horizontal line to improve readability
+            pyplot.axhline(
+                current, color="grey", lw=1
+            )  # Add horizontal line to improve readability
             current += 5
 
-        pyplot.xlabel('Hz', fontsize=12)
-        pyplot.ylabel('dB', fontsize=12)
-        pyplot.plot(x, y, color='blue')
-        pyplot.xscale('log')
+        pyplot.xlabel("Hz", fontsize=12)
+        pyplot.ylabel("dB", fontsize=12)
+        pyplot.plot(x, y, color="blue")
+        pyplot.xscale("log")
         pyplot.title(title)
 
         pyplot.show()
@@ -195,12 +191,11 @@ class Curve:
         reference_from = max(resolved_from, self.starting_freq)
         reference_to = min(resolved_to, self.max_frequency)
         if reference_from >= reference_to:
-            raise ValueError(
-                "Reference frequency range does not overlap the curve domain"
-            )
+            raise ValueError("Reference frequency range does not overlap the curve domain")
 
         points = [
-            frequency for frequency in self._frequencies
+            frequency
+            for frequency in self._frequencies
             if reference_from <= frequency <= reference_to
         ]
         if not points:
@@ -208,11 +203,7 @@ class Curve:
         avg = sum(self(points)) / len(points)
 
         y = [value - avg for value in self._values]
-        return Curve(
-            x=self._frequencies,
-            y=y,
-            centered_at=avg
-        )
+        return Curve(x=self._frequencies, y=y, centered_at=avg)
 
     @property
     def domain_frequencies(self) -> list[float]:
@@ -258,14 +249,17 @@ class Curve:
         if start >= end:
             raise ValueError("Curves do not have an overlapping frequency range")
 
-        points = sorted({
-            frequency
-            for curve in curves
-            for frequency in curve._frequencies
-            if start <= frequency <= end
-        } | {start, end})
-        for Hz in points:
-            dbs = [c(Hz) for c in curves]
+        points = sorted(
+            {
+                frequency
+                for curve in curves
+                for frequency in curve._frequencies
+                if start <= frequency <= end
+            }
+            | {start, end}
+        )
+        for hz in points:
+            dbs = [c(hz) for c in curves]
             avg = Utils.avg([10 ** (db / 10) for db in dbs])
             y.append(math.log10(avg) * 10)
 
@@ -278,12 +272,15 @@ def _merged_frequency_grid(
     start: float,
     end: float,
 ) -> list[float]:
-    return sorted({
-        frequency
-        for curve in (left, right)
-        for frequency in curve._frequencies
-        if start <= frequency <= end
-    } | {start, end})
+    return sorted(
+        {
+            frequency
+            for curve in (left, right)
+            for frequency in curve._frequencies
+            if start <= frequency <= end
+        }
+        | {start, end}
+    )
 
 
 def _validate_frequency(value: SupportsFloat) -> float:
@@ -315,6 +312,3 @@ def _reduce_args(
 
 def _coerce_float(value: object) -> float:
     return float(cast(SupportsFloat, value))
-
-
-

@@ -28,7 +28,7 @@ If you want to use diagnostic plots, install the optional plotting dependency:
 
 The simplest way is to either supply a list of paths to REW files or a directory with the files.
 
-        from orca.RewToGraphEq import get_graph_eq_str
+        from orca import get_graph_eq_str
 
         eq_str = get_graph_eq_str(file_paths=["path/to/file1", "path/to/file2", "path/to/file3"])
         # Or if all measurements are inside a directory:
@@ -80,7 +80,7 @@ Just pass your own EQConfig to get_graph_eq_str or create_eq
 
 EQ-Config
 
-        from orca.EQConfig import EQConfig
+        from orca import EQConfig
 
         EQConfig.from_range(eq_from=20, eq_to=20000, eq_res=128): Creates a config
         with eq_res log-spaced integer points between the supplied frequency bounds.
@@ -96,9 +96,14 @@ EQ-Config
 
 Wavelet's fixed GraphicEQ frequency layout lives in its own module:
 
-        from orca.Wavelet import config as wavelet_config
+        from orca import wavelet_config
 
         eq_config = wavelet_config()
+
+`format_eq_str(eq_curve)` serializes the curve's existing control points and values without
+applying additional constraints. Pass `format_eq_str(eq_curve, config=eq_config)` only when the
+curve should be resampled to another configured point grid or have that config's output
+constraints applied.
 
 ## Development
 
@@ -106,9 +111,11 @@ Run the complete test suite from the repository root with:
 
         python -m unittest discover -v
 
-Install the development dependencies and run the strict type check with:
+Install the development dependencies and run the quality checks with:
 
         pip install -e ".[dev]"
+        python -m ruff check .
+        python -m ruff format --check .
         python -m mypy
 
 
@@ -149,5 +156,9 @@ to which the boost gets changed.
 This way, we create an eq that gets more smooth, the higher the frequency gets.
 The weighting process can be changed by supplying a custom weighting function
 to the constructor of the EQConfig.
+
+## License
+
+ORCA is available under the [MIT License](LICENSE).
 
 
