@@ -218,7 +218,12 @@ def calc_eq_curve(
     point_levels: FloatArray = np.zeros(len(eq_points), dtype=float)
     reference_mask = _reference_mask(evaluation_points, reference_range)
 
-    for iteration, smoothing_factor in enumerate(SmoothingFactor):
+    optimization_smoothing_factors = (
+        smoothing_factor
+        for smoothing_factor in SmoothingFactor
+        if smoothing_factor is not SmoothingFactor.NO_SMOOTHING
+    )
+    for iteration, smoothing_factor in enumerate(optimization_smoothing_factors):
         current_boost = interpolation @ point_levels
         measurement_levels = np.asarray(
             [measurement.eval(evaluation_points, smoothing_factor) for measurement in measurements],

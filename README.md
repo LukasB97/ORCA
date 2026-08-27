@@ -224,7 +224,7 @@ It then:
 2. adapts the low-frequency target where achieving the requested curve would require excessive
    boost;
 3. optimizes the configured GraphicEQ control-point gains over several passes, from strongly
-   smoothed measurements to the original unsmoothed data;
+   smoothed measurements to minimally smoothed data;
 4. evaluates every candidate EQ on the measurements' native frequency grid; and
 5. estimates the response produced by applying the exported, finite-resolution GraphicEQ curve.
 
