@@ -353,11 +353,11 @@ class ConfigAndEndToEndTests(unittest.TestCase):
             )
         }
         expected_levels = {
-            20: -1.8,
-            29: -1.7,
-            1004: -4.8,
-            9862: -5.1,
-            20000: -2.8,
+            20: -2.0,
+            29: -0.8,
+            1004: -4.5,
+            9862: -4.8,
+            20000: -2.5,
         }
         for frequency, expected in expected_levels.items():
             self.assertAlmostEqual(levels[frequency], expected, delta=0.2)

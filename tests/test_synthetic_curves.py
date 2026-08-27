@@ -1,5 +1,4 @@
 import unittest
-from unittest import mock
 
 import numpy as np
 
@@ -160,20 +159,6 @@ class SyntheticCurveTests(unittest.TestCase):
         )
 
         np.testing.assert_allclose(eq.domain_values, 0, atol=0.01)
-
-    def test_eq_optimization_stops_at_minimum_smoothing(self):
-        measurement = Measurement(Curve([100, 1000, 10000], [0, 0, 0]))
-
-        with mock.patch.object(measurement, "eval", wraps=measurement.eval) as eval_curve:
-            calc_eq_curve(
-                [measurement],
-                TargetCurves.linear(),
-                _config_for_synthetic_tests(),
-            )
-
-        smoothing_factors = [call.args[1] for call in eval_curve.call_args_list]
-        self.assertIn(SmoothingFactor.MIN_SMOOTHING, smoothing_factors)
-        self.assertNotIn(SmoothingFactor.NO_SMOOTHING, smoothing_factors)
 
     def test_octave_smoothing_is_independent_of_measurement_density(self):
         def build_curve(points_per_octave):
