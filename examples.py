@@ -11,7 +11,10 @@ def basic_directory_example() -> str:
 
 
 def custom_target_curve_example() -> str:
-    target_curve = TargetCurves.downwards_slope(factor=0.5)
+    target_curve = TargetCurves.house_curve(
+        bass_gain_db=4.0,
+        treble_gain_db=-1.5,
+    )
     return get_graph_eq_str(
         measurements_dir=str(EXAMPLE_MEASUREMENTS),
         target_curve=target_curve,
